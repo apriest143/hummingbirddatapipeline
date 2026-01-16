@@ -1,0 +1,87 @@
+row_index,institution,master_city,master_state,query_norm,matched_irs_name,irs_city,irs_state,score,city_ok,state_ok,ein_filled
+98,EDP University of Puerto Rico-Manati,Manati,PR,edp university of puerto rico manati,Edp University of Puerto Rico Inc.,San Juan,PR,89.85507246376811,False,True,660277132
+336,Saint Edward's University,Austin,TX,saint edward s university,St. Edwards University,Austin,TX,91.30434782608697,True,True,741109641
+588,Rabbinical College of Ohr Shimon Yisroel,Brooklyn,NY,rabbinical college of ohr shimon yisroel,Rabbinical College of Shimon Yisroel Inc.,Brooklyn,NY,90.0,True,True,113203397
+596,Central Yeshiva Tomchei Tmimim Lubavitz,Brooklyn,NY,central yeshiva tomchei tmimim lubavitz,Central Yeshiva Tomchei Timimim Lubavitz of the US A,Brooklyn,NY,89.65517241379311,True,True,111797166
+1016,CET-San Diego,San Diego,CA,cet san diego,Cyt San Diego,El Cajon,CA,92.3076923076923,False,True,452499705
+1032,Texas Barber College,Houston,TX,texas barber college,Texas Bar College,Austin,TX,91.89189189189189,False,True,020581226
+1105,Ace Institute of Technology,New York,NY,ace institute of technology,Institute of Technology,Brooklyn,NY,92.0,False,True,300193720
+1423,CALC Institute of Technology,Alton,IL,calc institute of technology,Institute of Gas Technology,Des Plaines,IL,90.9090909090909,False,True,362170137
+1833,Colgate Rochester Crozer Divinity School,Rochester,NY,colgate rochester crozer divinity school,Colgate Rochester Divinity School,Rochester,NY,90.41095890410959,True,True,160743916
+1914,The New England Conservatory of Music,Boston,MA,new england conservatory of music,New England Conservatory of Music,Boston,MA,100.0,True,True,237225104
+2179,Mirrer Yeshiva Cent Institute,Brooklyn,NY,mirrer yeshiva cent institute,Mirrer Yeshiva Central Institute,Brooklyn,NY,95.08196721311475,True,True,111782116
+2314,The Juilliard School,New York,NY,juilliard school,Juilliard School,New York,NY,100.0,True,True,131624067
+2339,California Northstate University,Elk Grove,CA,california northstate university,California State University,Fresno,CA,91.52542372881356,False,True,941085570
+3438,Strayer University-Delaware,Wilmington,DE,strayer university delaware,Delaware State University,Dover,DE,92.3076923076923,False,True,510305893
+3439,Strayer University-Mississippi,Jackson,MS,strayer university mississippi,Mississippi State University,Ms State,MS,93.10344827586206,False,True,646000819
+3447,Strayer University-Florida,Tampa,FL,strayer university florida,Florida State University,Tallahassee,FL,92.0,False,True,591961248
+11729,MG Retreat Centers,Colorado Springs,CO,mg retreat centers,Mg Retreat Centers Inc.,Monument,CO,90.0,False,True,921694627
+11740,Barnabas,Los Angeles-Long Beach-Anaheim,CA,barnabas,Barnabas,Rocklin,CA,100.0,False,True,911259946
+11745,Full Sail Ministries,Visalia,CA,full sail ministries,Full Sail Ministries Inc.,Bakersfield,CA,90.9090909090909,False,True,810735730
+11753,Appamada,Austin-Round Rock-Georgetown,TX,appamada,Appamada,Austin,TX,100.0,False,True,203671874
+11799,Dhamma Yawei Tawya Meditation Center,Riverside-San Bernardino-Ontario,CA,dhamma yawei tawya meditation center,Dhamma Yawei Tawya Meditation Center,Riverside,CA,100.0,False,True,814934725
+11825,Association of Nysccboa,Syracuse,NY,association of nysccboa,Association of Nysccboa Ltd.,Auburn,NY,92.0,False,True,461240530
+11829,The Sabbath Life Corp,Tulsa,OK,sabbath life corp,The Sabbath Life Corp,Tulsa,OK,100.0,True,True,882317256
+11840,Reserve at Tri-Mountain,Atlanta-Sandy Springs-Alpharetta,GA,reserve at tri mountain,Reserve at Tri-Mountain Inc.,Atlanta,GA,92.0,False,True,272148211
+11856,Hemophilia of Iowa,Des Moines-West Des Moines,IA,hemophilia of iowa,Hemophilia of Iowa Inc.,Durant,IA,90.0,False,True,421334948
+11875,Theology of the Body Cleveland,Cleveland-Elyria,OH,theology of body cleveland,Theology of the Body Cleveland,Brecksville,OH,100.0,False,True,843099051
+11912,Feliciana Retreat and Conference Center,Baton Rouge,LA,feliciana retreat and conference center,Feliciana Retreat and Conference Center Inc.,Norwood,LA,95.1219512195122,False,True,824893903
+11946,Shree Maharishi Bhrigu Ashram,Los Angeles-Long Beach-Anaheim,CA,shree maharishi bhrigu ashram,Shree Maharishi Bhrigu Ashram,Trabuco Cyn,CA,100.0,False,True,260402876
+11948,Temple of Light,Phoenix-Mesa-Chandler,AZ,temple of light,Temple of Light,Tempe,AZ,100.0,False,True,880876358
+11982,Pacific Southwest Mennonite Retreat Ministries,Fresno,CA,pacific southwest mennonite retreat ministries,Pacific Southwest Mennonite Retreat Ministries Inc.,Fresno,CA,95.83333333333334,True,True,946127191
+11992,Marriage Encounter,Houston-The Woodlands-Sugar Land,TX,marriage encounter,Marriage Encounter Inc.,Fulshear,TX,90.0,False,True,237310651
+11998,In Ipso,Denver-Aurora-Lakewood,CO,in ipso,In Ipso,Littleton,CO,100.0,False,True,275196942
+12016,Crossroads 4 Christ,Hartford-East Hartford-Middletown,CT,crossroads 4 christ,Crossroads 4 Christ Inc.,Manchester,CT,90.47619047619048,False,True,823889116
+12026,Margo Fieseler Ministries,Milwaukee-Waukesha,WI,margo fieseler ministries,Margo Fieseler Ministries,Oconomowoc,WI,100.0,False,True,464976976
+12032,Thriving Pink,Sacramento-Roseville-Folsom,CA,thriving pink,Thriving Pink,Davis,CA,100.0,False,True,812972130
+12056,United Methodist Camp and Retreat Ministries Association,Atlanta-Sandy Springs-Alpharetta,GA,united methodist camp and retreat ministries association,United Methodist Camp and Retreat Ministries Association Inc.,Dahlonega,GA,96.55172413793103,False,True,845035733
+12068,Woods and Water Christian Retreat,Mansfield,OH,woods and water christian retreat,Woods & Water Christian Retreat Inc.,Perrysville,OH,94.28571428571428,False,True,341009148
+12069,Awakened Heart Ministries,Detroit-Warren-Dearborn,MI,awakened heart ministries,Awakened Heart Ministries,Troy,MI,100.0,False,True,261586102
+12072,Gospel Lakes Ministries,Houston-The Woodlands-Sugar Land,TX,gospel lakes ministries,Gospel Lakes Ministries Inc.,New Waverly,TX,92.0,False,True,760617085
+12085,Faith and Grief Ministries,Dallas-Fort Worth-Arlington,TX,faith and grief ministries,Faith & Grief Ministries Inc.,Dallas,TX,92.85714285714286,False,True,453959179
+12112,Everyday Zen,San Francisco-Oakland-Berkeley,CA,everyday zen,Everyday Zen,Muir Beach,CA,100.0,False,True,943346138
+12185,Homes and Havens,Chattanooga,TN-GA,homes and havens,Homes & Havens,Chattanooga,TN,100.0,True,False,821875666
+12191,Chambers Camp and Retreat Center,Elmira,NY,chambers camp and retreat center,Chambers Camp and Retreat Center Inc.,Beaver Dams,NY,94.11764705882352,False,True,833439208
+12225,Wiawaka Holiday House,Glens Falls,NY,wiawaka holiday house,Wiawaka Holiday House Inc.,Lake George,NY,91.30434782608697,False,True,141364699
+12251,Contemplative Outreach of Colorado,Denver-Aurora-Lakewood,CO,contemplative outreach of colorado,Contemplative Outreach of Colorado,Denver,CO,100.0,False,True,841243208
+12281,Chase the Victory,Atlanta-Sandy Springs-Alpharetta,GA,chase victory,Chase the Victory,Carrollton,GA,100.0,False,True,851151304
+12295,High Pastures Christian Retreat Center,Asheville,NC,high pastures christian retreat center,High Pastures Christian Retreat Center Inc.,Burnsville,NC,95.0,False,True,237017056
+12323,Baldwin Research Institute,Albany-Schenectady-Troy,NY,baldwin research institute,Baldwin Research Institute Inc.,Amsterdam,NY,92.85714285714286,False,True,223250064
+12346,Sacred Mountain Retreat Center,Rapid City,SD,sacred mountain retreat center,Sacred Mountain Retreat Center Inc.,Deadwood,SD,93.75,False,True,832582292
+12353,Brethren Retreat Ministries,Elkhart-Goshen,IN,brethren retreat ministries,Brethren Retreat Ministries Inc.,Shipshewana,IN,93.10344827586206,False,True,825407198
+12360,Blue Skies Ministries,Atlanta-Sandy Springs-Alpharetta,GA,blue skies ministries,Blue Skies Ministries Inc.,Marietta,GA,91.30434782608697,False,True,272071359
+12387,The Vineyard Camp and Retreat Center,Winston-Salem,NC,vineyard camp and retreat center,The Vineyard Camp & Retreat Center Inc.,Westfield,NC,94.11764705882352,False,True,581596737
+12398,Santiago Retreat Center,Los Angeles-Long Beach-Anaheim,CA,santiago retreat center,Santiago Retreat Center,Silverado,CA,100.0,False,True,271105387
+12419,The Oasis Corporation,Wichita,KS,oasis corporation,Oasis Corporation,Wichita,KS,100.0,True,True,900112819
+12422,The Mussar Institute,Miami-Fort Lauderdale-Pompano Beach,FL,mussar institute,The Mussar Institute,Boynton Beach,FL,100.0,False,True,202095736
+12423,Gloryview Ranch Ministries,Flagstaff,AZ,gloryview ranch ministries,Gloryview Ranch Ministries,Parks,AZ,100.0,False,True,854402190
+12452,The Cat Spring Retreat,Houston-The Woodlands-Sugar Land,TX,cat spring retreat,Cat Spring Retreat Inc.,Cat Spring,TX,90.0,False,True,742992918
+12461,Joy Baptist Camp Association,Janesville-Beloit,WI,joy baptist camp association,Joy Baptist Camp Association Inc.,Whitewater,WI,93.33333333333333,False,True,391027840
+12463,Spiritual Retreat Foundation,San Antonio-New Braunfels,TX,spiritual retreat foundation,Spiritual Retreat Foundation,Pipe Creek,TX,100.0,False,True,465131843
+12491,Mission Creek Camp and Retreat Center,Topeka,KS,mission creek camp and retreat center,Mission Creek Camp & Retreat Center Inc.,Topeka,KS,94.87179487179486,True,True,861616332
+12495,REAL MOMENTUM Ministries,Morristown,TN,real momentum ministries,Real Momentum Ministries Inc.,Blaine,TN,92.3076923076923,False,True,461609320
+12507,Christian Life Outreach,Phoenix-Mesa-Chandler,AZ,christian life outreach,Christian Life Outreach Inc.,Scottsdale,AZ,92.0,False,True,860686761
+12529,Hilltop Renewal Center,Los Angeles-Long Beach-Anaheim,CA,hilltop renewal center,Hilltop Renewal Center Inc.,Brea,CA,91.66666666666666,False,True,330733158
+12546,The Oaks Collaborative,Auburn-Opelika,AL,oaks collaborative,The Oaks Collaborative,Auburn,AL,100.0,False,True,465021845
+12600,Our Lady of Fatima Retreat House,Indianapolis-Carmel-Anderson,IN,our lady of fatima retreat house,Our Lady of Fatima Retreat House Inc.,Indianapolis,IN,94.11764705882352,False,True,450608082
+12620,Mission of Divine Mercy,San Antonio-New Braunfels,TX,mission of divine mercy,Mission of Divine Mercy Inc.,Canyon Lake,TX,92.0,False,True,300167139
+12625,Montreat Conference Center Development Foundation,Asheville,NC,montreat conference center development foundation,Montreat Conference Center Development Foundation Inc.,Montreat,NC,96.07843137254902,False,True,562151021
+12681,The Retreat Home for Children,San Antonio-New Braunfels,TX,retreat home for children,Retreat Home for Children,Boerne,TX,100.0,False,True,851498988
+12746,Pittsburgh Kids Foundation,Pittsburgh,PA,pittsburgh kids foundation,Pittsburgh Kids Foundation Inc.,Pittsburgh,PA,92.85714285714286,True,True,261867077
+12757,Spitzer-Magis Center,Los Angeles-Long Beach-Anaheim,CA,spitzer magis center,Spitzer-Magis Center,Garden Grove,CA,100.0,False,True,542075888
+12767,Hargis Christian Camp,Birmingham-Hoover,AL,hargis christian camp,Hargis Christian Camp,Chelsea,AL,100.0,False,True,873403593
+12790,Drala Mountain Center,Fort Collins,CO,drala mountain center,Drala Mountain Center,Red Fe Lks,CO,100.0,False,True,841535130
+12800,The Firs Bible and Missionary Conference,Bellingham,WA,firs bible and missionary conference,Firs Bible & Missionary Conference,Bellingham,WA,100.0,True,True,910609820
+12802,Sambica,Seattle-Tacoma-Bellevue,WA,sambica,Sambica,Bellevue,WA,100.0,False,True,910761611
+12807,North Georgia Camp and Retreat Ministries,Gainesville,GA,north georgia camp and retreat ministries,North Georgia Camp and Retreat Ministries Inc.,Dahlonega,GA,95.34883720930233,False,True,580633975
+12833,Silver Birch Ranch,Green Bay,WI,silver birch ranch,Silver Birch Ranch Inc.,White Lake,WI,90.0,False,True,363076658
+12861,Oak Hill Retreat Center,Dallas-Fort Worth-Arlington,TX,oak hill retreat center,Oak Hill Retreat Center,Rockwall,TX,100.0,False,True,922469918
+12879,Native American Rights Fund,Boulder,CO,native american rights fund,Native American Rights Fund,Boulder,CO,100.0,True,True,840611876
+12886,Native Americans in Philanthropy,Washington,DC,native americans in philanthropy,Native Americans in Philanthropy,Washington,DC,100.0,True,True,561849598
+12892,Native American Indian Center of Central Ohio,Columbus,OH,native american indian center of central ohio,Native American Indian Center of Central Ohio,Columbus,OH,100.0,True,True,311427508
+12893,Foothill Indian Education Alliance Sierra Native American Council,El Dorado,CA,foothill indian education alliance sierra native american council,Foothill Indian Education Alliance Sierra Native American Council,El Dorado,CA,100.0,True,True,680361662
+12903,National Native American Boarding School Healing Coalition,Minneapolis,MN,national native american boarding school healing coalition,National Native American Boarding School Healing Coalition,Minneapolis,MN,100.0,True,True,383888458
+12909,Native American Food Sovereignty Alliance,Flagstaff,AZ,native american food sovereignty alliance,Native American Food Sovereignty Alliance,Flagstaff,AZ,100.0,True,True,464578553
+12912,Native American Child Care Center Inc.,Sioux City,IA,native american child care center inc,Native American Child Care Center Inc.,Sioux City,IA,100.0,True,True,421149473
+12913,Native American and Indigenous Studies Association,Tuscon,AZ,native american and indigenous studies association,Native American and Indigenous Studies Association Inc.,Phoenix,AZ,96.15384615384616,False,True,800419427
+12920,Native American Advancement Corp,Bridgeton,NJ,native american advancement corp,Native American Advancement Corp,Bridgeton,NJ,100.0,True,True,272313072
