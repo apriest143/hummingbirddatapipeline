@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 
 # ---- paths ----
-MASTER_CSV = Path("hv_master_data/data/HummingbirdDataWorking.csv")
+MASTER_CSV = Path("hv_master_data/data/HummingbirdDataWorking_ipeds_merged.csv")
 INDEX_CSV  = Path("hv_master_data/data/NonEd990.csv")
 
 OUT_MASTER = Path("hv_master_data/data/HummingbirdDataWorking_ein_exact.csv")

@@ -1,14 +1,13 @@
 import pandas as pd
 
-df = pd.read_csv("hv_master_data/data//HummingbirdDataWorking_ein_irs78_geo_fuzzy.csv")  
+df = pd.read_csv("hv_master_data/data/HummingbirdDataWorking_ein_exact_fuzzy.csv", dtype=str)  
 
 institution_types = [
     "Private College",
     "Religious Institution",
     "Wellness/Retreat",
-    "Tribal Center"
+    "Tribal Centers"
 ]
-
 for inst_type in institution_types:
     missing = df[
         (df["institution_type"] == inst_type) &
