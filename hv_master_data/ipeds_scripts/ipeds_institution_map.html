@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>IPEDS Institution Map</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; }
+        #map { width: 100%; height: 100vh; }
+        
+        #info {
+            position: absolute; top: 10px; left: 50px; z-index: 1000;
+            background: white; padding: 15px; border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2); max-width: 300px;
+        }
+        #info h3 { margin-bottom: 10px; }
+        #status { color: #666; font-size: 13px; margin-bottom: 10px; }
+        #filters { margin-top: 10px; }
+        #filters select, #filters input {
+            width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px;
+        }
+        #filters button {
+            width: 100%; padding: 10px; margin-top: 5px;
+            background: #3388ff; color: white; border: none; border-radius: 4px; cursor: pointer;
+        }
+        #filters button:hover { background: #2266dd; }
+        #count { font-weight: bold; margin-top: 10px; }
+        
+        .legend {
+            background: white; padding: 10px; border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        .legend div { margin: 3px 0; display: flex; align-items: center; font-size: 12px; }
+        .legend span {
+            display: inline-block; width: 14px; height: 14px; border-radius: 50%;
+            margin-right: 6px; border: 1px solid #666;
+        }
+        
+        .leaflet-popup-content { max-height: 400px; overflow-y: auto; }
+        .popup { font-size: 12px; min-width: 280px; }
+        .popup h4 { margin: 0 0 8px 0; color: #333; border-bottom: 2px solid #3388ff; padding-bottom: 5px; }
+        .popup-section { margin: 8px 0; padding: 8px; background: #f5f5f5; border-radius: 4px; }
+        .popup-section.risk { background: #fee; border-left: 3px solid #e74c3c; }
+        .popup-section.land { background: #efe; border-left: 3px solid #27ae60; }
+        .popup-row { display: flex; justify-content: space-between; margin: 3px 0; }
+        .popup-label { color: #666; }
+        .popup-value { font-weight: 500; }
+        .badge {
+            display: inline-block; padding: 2px 8px; border-radius: 10px;
+            font-size: 11px; font-weight: bold; color: white;
+        }
+        .badge-critical { background: #e74c3c; }
+        .badge-high { background: #e67e22; }
+        .badge-moderate { background: #f1c40f; color: #333; }
+        .badge-low { background: #3498db; }
+        .badge-healthy { background: #27ae60; }
+        .flag { display: inline-block; padding: 1px 5px; margin: 2px; border-radius: 3px; font-size: 10px; background: #fdd; color: #900; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="info">
+        <h3>🗺️ IPEDS Map</h3>
+        <div id="status">Loading...</div>
+        <div id="filters" style="display:none;">
+            <select id="fDistress">
+                <option value="">All Distress Levels</option>
+                <option value="Critical">Critical</option>
+                <option value="High">High</option>
+                <option value="Moderate">Moderate</option>
+                <option value="Low">Low</option>
+                <option value="Healthy">Healthy</option>
+            </select>
+            <select id="fControl">
+                <option value="">All Control Types</option>
+                <option value="Public">Public</option>
+                <option value="Private not-for-profit">Private Non-Profit</option>
+                <option value="Private for-profit">Private For-Profit</option>
+            </select>
+            <select id="fState"><option value="">All States</option></select>
+            <select id="fLand">
+                <option value="">All Institutions</option>
+                <option value="high">High Land Potential</option>
+                <option value="any">Any Land Potential</option>
+            </select>
+            <input type="number" id="fScore" placeholder="Min distress score (0-100)">
+            <button onclick="applyFilters()">Apply Filters</button>
+            <button onclick="resetFilters()" style="background:#888;">Reset</button>
+            <div id="count"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    
+    <script>
+    // Globals
+    var map, markerCluster, allData = [];
+    var colors = { Critical:'#e74c3c', High:'#e67e22', Moderate:'#f1c40f', Low:'#3498db', Healthy:'#27ae60' };
+    
+    // Initialize map immediately
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM loaded, initializing...');
+        
+        // Create map
+        map = L.map('map').setView([39.8, -98.5], 4);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+        
+        // Create marker cluster group
+        markerCluster = L.markerClusterGroup({
+            chunkedLoading: true,
+            maxClusterRadius: 50
+        });
+        map.addLayer(markerCluster);
+        
+        // Add legend
+        var legend = L.control({position: 'bottomright'});
+        legend.onAdd = function() {
+            var div = L.DomUtil.create('div', 'legend');
+            div.innerHTML = '<strong>Distress Level</strong><br>' +
+                '<div><span style="background:#e74c3c"></span>Critical</div>' +
+                '<div><span style="background:#e67e22"></span>High</div>' +
+                '<div><span style="background:#f1c40f"></span>Moderate</div>' +
+                '<div><span style="background:#3498db"></span>Low</div>' +
+                '<div><span style="background:#27ae60"></span>Healthy</div>';
+            return div;
+        };
+        legend.addTo(map);
+        
+        // Load CSV
+        loadCSV();
+    });
+    
+    function loadCSV() {
+        document.getElementById('status').innerHTML = 'Loading CSV...';
+        console.log('Attempting to load CSV...');
+        
+        Papa.parse('IPEDS_analyzed_2022_2024.csv', {
+            download: true,
+            header: true,
+            skipEmptyLines: true,
+            complete: function(results) {
+                console.log('CSV parsed, rows:', results.data.length);
+                console.log('First row:', results.data[0]);
+                console.log('Columns:', Object.keys(results.data[0]));
+                
+                if (results.data.length < 10) {
+                    document.getElementById('status').innerHTML = 'Error: CSV appears empty or invalid';
+                    return;
+                }
+                
+                allData = results.data;
+                document.getElementById('status').innerHTML = 'Loaded ' + allData.length + ' institutions';
+                document.getElementById('filters').style.display = 'block';
+                
+                // Populate states dropdown
+                var states = {};
+                allData.forEach(function(r) {
+                    if (r['State abbreviation']) states[r['State abbreviation']] = 1;
+                });
+                var stateSelect = document.getElementById('fState');
+                Object.keys(states).sort().forEach(function(s) {
+                    var opt = document.createElement('option');
+                    opt.value = s;
+                    opt.textContent = s;
+                    stateSelect.appendChild(opt);
+                });
+                
+                // Show all markers
+                showMarkers(allData);
+            },
+            error: function(err) {
+                console.error('CSV parse error:', err);
+                document.getElementById('status').innerHTML = 'Error loading CSV: ' + err.message;
+            }
+        });
+    }
+    
+    function showMarkers(data) {
+        console.log('showMarkers called with', data.length, 'rows');
+        markerCluster.clearLayers();
+        
+        var count = 0;
+        var errors = 0;
+        
+        data.forEach(function(row, idx) {
+            // Get lat/lng - try different possible column names
+            var lat = parseFloat(row['Latitude location of institution']);
+            var lng = parseFloat(row['Longitude location of institution']);
+            
+            // Skip invalid coordinates
+            if (isNaN(lat) || isNaN(lng)) {
+                if (idx < 5) console.log('Row', idx, 'invalid coords:', row['Latitude location of institution'], row['Longitude location of institution']);
+                errors++;
+                return;
+            }
+            if (lat === 0 && lng === 0) {
+                errors++;
+                return;
+            }
+            if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+                errors++;
+                return;
+            }
+            
+            count++;
+            
+            // Get color based on distress category
+            var cat = row['distress_category'] || 'Unknown';
+            var color = colors[cat] || '#999';
+            
+            // Create marker
+            var marker = L.circleMarker([lat, lng], {
+                radius: 6,
+                fillColor: color,
+                color: '#fff',
+                weight: 1.5,
+                opacity: 1,
+                fillOpacity: 0.8
+            });
+            
+            // Create popup
+            marker.bindPopup(createPopup(row));
+            
+            // Add to cluster
+            markerCluster.addLayer(marker);
+        });
+        
+        console.log('Added', count, 'markers, skipped', errors, 'invalid');
+        document.getElementById('count').innerHTML = 'Showing: ' + count + ' / ' + allData.length;
+    }
+    
+    function fmt(v) {
+        if (v === null || v === undefined || v === '' || v === 'NaN' || (typeof v === 'number' && isNaN(v))) return 'N/A';
+        return v;
+    }
+    
+    function fmtMoney(v) {
+        if (v === null || v === undefined || v === '' || isNaN(parseFloat(v))) return 'N/A';
+        var n = parseFloat(v);
+        if (Math.abs(n) >= 1e9) return '$' + (n/1e9).toFixed(1) + 'B';
+        if (Math.abs(n) >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
+        if (Math.abs(n) >= 1e3) return '$' + (n/1e3).toFixed(0) + 'K';
+        return '$' + n.toFixed(0);
+    }
+    
+    function fmtPct(v) {
+        if (v === null || v === undefined || v === '' || isNaN(parseFloat(v))) return 'N/A';
+        return parseFloat(v).toFixed(1) + '%';
+    }
+    
+    function createPopup(r) {
+        var cat = r['distress_category'] || 'Unknown';
+        var badgeClass = 'badge-' + cat.toLowerCase();
+        var score = r['distress_score'];
+        score = (score !== '' && !isNaN(parseFloat(score))) ? parseFloat(score).toFixed(0) : 'N/A';
+        
+        // Build flags
+        var flags = '';
+        if (r['flag_enrollment_decline'] == 1) flags += '<span class="flag">📉 Enrollment</span>';
+        if (r['flag_low_retention'] == 1) flags += '<span class="flag">🚪 Retention</span>';
+        if (r['flag_low_equity_ratio'] == 1) flags += '<span class="flag">💳 Equity</span>';
+        if (r['flag_negative_net_worth'] == 1) flags += '<span class="flag">🔴 Net Worth</span>';
+        if (r['flag_high_tuition_dependency'] == 1) flags += '<span class="flag">🎓 Tuition Dep</span>';
+        if (r['flag_operating_losses'] == 1) flags += '<span class="flag">💸 Losses</span>';
+        if (r['flag_high_debt'] == 1) flags += '<span class="flag">🏦 Debt</span>';
+        
+        var html = '<div class="popup">' +
+            '<h4>' + fmt(r['institution name']) + '</h4>' +
+            '<div>' + fmt(r['City location of institution']) + ', ' + fmt(r['State abbreviation']) + '</div>' +
+            '<div>' + fmt(r['Control of institution']) + ' • ' + fmt(r['Sector of institution']) + '</div>' +
+            
+            '<div class="popup-section risk">' +
+            '<strong>⚠️ Distress: <span class="badge ' + badgeClass + '">' + cat + '</span> ' + score + '/100</strong>' +
+            (flags ? '<div style="margin-top:5px">' + flags + '</div>' : '') +
+            '</div>' +
+            
+            '<div class="popup-section">' +
+            '<strong>📊 Enrollment</strong>' +
+            '<div class="popup-row"><span class="popup-label">2024:</span><span class="popup-value">' + fmt(r['Total  enrollment_2024']) + '</span></div>' +
+            '<div class="popup-row"><span class="popup-label">2022:</span><span class="popup-value">' + fmt(r['Total  enrollment_2022']) + '</span></div>' +
+            '<div class="popup-row"><span class="popup-label">Change:</span><span class="popup-value">' + fmtPct(r['enrollment_change_pct_2yr']) + '</span></div>' +
+            '<div class="popup-row"><span class="popup-label">Retention:</span><span class="popup-value">' + fmtPct(r['Full-time retention rate, 2024_2024']) + '</span></div>' +
+            '<div class="popup-row"><span class="popup-label">Graduation:</span><span class="popup-value">' + fmtPct(r['Graduation rate, total cohort_2024']) + '</span></div>' +
+            '</div>' +
+            
+            '<div class="popup-section">' +
+            '<strong>💰 Financials</strong>' +
+            '<div class="popup-row"><span class="popup-label">Net Worth:</span><span class="popup-value">' + fmtMoney(r['net_worth_2024']) + '</span></div>' +
+            '<div class="popup-row"><span class="popup-label">Revenues:</span><span class="popup-value">' + fmtMoney(r['core_revenues_2024']) + '</span></div>' +
+            '<div class="popup-row"><span class="popup-label">Expenses:</span><span class="popup-value">' + fmtMoney(r['core_expenses_2024']) + '</span></div>' +
+            '<div class="popup-row"><span class="popup-label">Net Income:</span><span class="popup-value">' + fmtMoney(r['net_income_2024']) + '</span></div>' +
+            '<div class="popup-row"><span class="popup-label">Equity Ratio:</span><span class="popup-value">' + fmtPct(r['equity_ratio_2024']) + '</span></div>' +
+            '<div class="popup-row"><span class="popup-label">Tuition Dep:</span><span class="popup-value">' + fmtPct(r['tuition_dependency_pct_2024']) + '</span></div>' +
+            '</div>' +
+            
+            '<div class="popup-section land">' +
+            '<strong>🏞️ Property</strong>' +
+            '<div class="popup-row"><span class="popup-label">Plant/Property:</span><span class="popup-value">' + fmtMoney(r['Total Plant, Property, and Equipment_2024']) + '</span></div>' +
+            '<div class="popup-row"><span class="popup-label">Buildings:</span><span class="popup-value">' + fmtMoney(r['Buildings - End of year_2024']) + '</span></div>' +
+            '<div class="popup-row"><span class="popup-label">Land Potential:</span><span class="popup-value">' + (r['flag_high_land_potential'] == 1 ? '🌟 HIGH' : r['flag_land_potential'] == 1 ? '✅ Yes' : '❌ No') + '</span></div>' +
+            '</div>' +
+            
+            '<div class="popup-section">' +
+            '<strong>📍 Details</strong>' +
+            '<div class="popup-row"><span class="popup-label">UNITID:</span><span class="popup-value">' + fmt(r['unitid']) + '</span></div>' +
+            '<div class="popup-row"><span class="popup-label">EIN:</span><span class="popup-value">' + fmt(r['Employer Identification Number']) + '</span></div>' +
+            '<div class="popup-row"><span class="popup-label">Urbanization:</span><span class="popup-value">' + fmt(r['Degree of urbanization (Urban-centric locale)']) + '</span></div>' +
+            '</div>' +
+            
+            '</div>';
+        
+        return html;
+    }
+    
+    function applyFilters() {
+        var fDistress = document.getElementById('fDistress').value;
+        var fControl = document.getElementById('fControl').value;
+        var fState = document.getElementById('fState').value;
+        var fLand = document.getElementById('fLand').value;
+        var fScore = parseFloat(document.getElementById('fScore').value) || 0;
+        
+        var filtered = allData.filter(function(r) {
+            if (fDistress && r['distress_category'] !== fDistress) return false;
+            if (fControl && r['Control of institution'] !== fControl) return false;
+            if (fState && r['State abbreviation'] !== fState) return false;
+            if (fLand === 'high' && r['flag_high_land_potential'] != 1) return false;
+            if (fLand === 'any' && r['flag_land_potential'] != 1) return false;
+            if (fScore > 0) {
+                var score = parseFloat(r['distress_score']);
+                if (isNaN(score) || score < fScore) return false;
+            }
+            return true;
+        });
+        
+        showMarkers(filtered);
+    }
+    
+    function resetFilters() {
+        document.getElementById('fDistress').value = '';
+        document.getElementById('fControl').value = '';
+        document.getElementById('fState').value = '';
+        document.getElementById('fLand').value = '';
+        document.getElementById('fScore').value = '';
+        showMarkers(allData);
+    }
+    </script>
+</body>
+</html>
