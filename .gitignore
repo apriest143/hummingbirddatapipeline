@@ -1,1 +1,10 @@
+git rm --cached hv_master_data/data/*.csv
+git rm --cached hv_master_data/acreage_scripts/full_dataset_prioritized.csv
+git rm --cached hv_master_data/data/hummingbird_map_standalone6.html
+git add .gitignore
+git commit -m "add gitignore, remove large data files from tracking"
+git push
+
 key.env
+*.csv
+unmatched_with_data_*.csv
