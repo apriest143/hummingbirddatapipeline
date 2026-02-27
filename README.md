@@ -30,8 +30,10 @@ Outputs = HummingbirdDataWorking_ipeds_merged, manual_review_multiple_matches.cs
 
 Here is the NCES-IPEDS batch Data session information for replicatability:
 2024: Guest_488336759694
-2023: Guest_687287391029
-2022: Guest_804974725436
+2023: Guest_92330925431
+2022: Guest_596931665520
+2021: Guest_80675050241
+2020: Guest_67273258839
 If udpdating, grabbing more vars, or grabbing more years MAKE SURE TO SAVE A NEW SESSION FOR FUTURE USE. Any new information or years will requre updates to the IPEDS_incorp.py file
 ideally the MLV file will be usable for pulling these vars and adding a year if needed. However, the IPEDS website consistently returns errors when trying to upload. so who knows.
 
@@ -74,3 +76,56 @@ Input = HummingbirdDataWorking_990_merged.csv
 Output = HummingbirdDataWorking_990_merged.csv
 
 9. IPEDS_financials.py - uses IPEDS financial information to fill in financial information for colleges that we were unable to find 990 information for. 
+
+==================================================================================================
+ 
+ START HERE FROM HERE ON OUT
+
+ ================================================================================================
+ Final Phase:
+A lot of work was done in between step 9 and now. However, these processes were iterated and improved upon leaving them obsolete. What you absolutely need in order to update anything down the line is: Hummingbird_Master_Distress.csv
+This is the master file with base 990 and IPEDS information and prototype distress scores. Any changes made to the dataset from here on out begin with this file. If adding institutions, add them to this.
+
+STEP 1:
+Hummingbird_Master_engine_990.py
+This file uses 990 filing data from 2020-2024 with a drastically larger variable selection to improve the distress score calculations.
+Input: Hummingbird_Master_Distress.csv
+Input: 990s folder (If adding new years, ensure that they follow the same naming format and the script is adjusted accordingly)
+Output: Hummingbird_Master_Distress_Enhanced.csv
+
+STEP 2: 
+Hummingbird_Master_engine_ipeds.py
+This file uses 2020-2024 IPEDS filings with a larger variable selection and a similar methodolgy to the improved 990 engine.
+Input: Hummingbird_Master_Distress_Enhanced.csv
+Input IPEDS folder (If adding new years, ensure that they follow the same naming format and the script is adjusted accordingly. Session information is found in step 3 above)
+Output: Hummingbird_Master_Distress_v2.csv
+
+STEP 3: ACREAGE SCRAPING
+This work is entirely done using files from the "acreage_scripts" folder. You will need:
+auto_clicker.py
+chat_acreage_bot.py
+full_dataset_prioritized.csv
+verified_acreage_enhanced.csv
+
+To get this running properly, make sure full_dataset_prioritized.csv is updated with any new institutions. Then open two terminals (down arrow next to the plus and click split terminal).
+Make sure you have VS open on the right side of your screen as the scraping happens on the left.
+
+Make sure your current directory is correct, run this in both terminals: 
+cd C:\Users\apriest1\Documents\GitHub\hummingbirddatapipeline\hv_master_data\acreage_scripts
+(will be different for you depending on file paths)
+
+In one terminal run: 
+python chat_acreage_bot.py --input full_dataset_prioritized.csv --output verified_acreage_enhanced.csv --resume
+In the other run:
+python auto_clicker.py --click 1180, 1070 (adjust this as needed to make sure you area clicking in the right terminal) 
+This can be ran to find the correct coords: python auto_clicker.py --find-position
+
+Then you just let it do its thing for as long as needed, it will output to:
+verified_acreage_enhanced.csv in real time so just stop the terminals when complete (ctrl+C)
+
+Step 4:
+master_acreage_merge.py
+This file takes the master file (with updated distress scoring) and merges the acreage scraping information into it.
+Input: verified_acreage_enhanced.csv
+Input: Hummingbird_Master_Distress_v2.csv
+Output: Hummingbird_Master_Distress_v2.csv (just overwrites relevant fields and returns the same file)
