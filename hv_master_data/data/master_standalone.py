@@ -25,7 +25,7 @@ import os
 
 MASTER_FILE = 'hv_master_data/data/Hummingbird_Master_Combined_v6.csv'
 MAP_TEMPLATE = 'hv_master_data/data/master_map2.html'
-OUTPUT_FILE = 'hv_master_data/data/hummingbird_map_standalone6.html'
+OUTPUT_FILE = 'index.html'  # outputs to repo root → served by GitHub Pages
 
 # Columns the map actually references (extracted from JS code)
 KEEP_COLUMNS = [

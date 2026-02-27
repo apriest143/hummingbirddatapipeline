@@ -787,7 +787,7 @@
 
 
     // =========================================================================
-    // NEWS PANEL \u2014 Google News RSS via allorigins CORS proxy
+    // NEWS PANEL \u2014 Google News RSS via corsproxy.io
     // No API key required. Works from any file:// or http:// context.
     // =========================================================================
 
@@ -917,16 +917,19 @@
         // Build Google News RSS URL, then wrap in allorigins proxy
         var query = encodeURIComponent('"' + _newsCurrentName + '"');
         var rssUrl = 'https://news.google.com/rss/search?q=' + query + '&hl=en-US&gl=US&ceid=US:en';
-        var proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(rssUrl);
+        var proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(rssUrl);
 
         fetch(proxyUrl)
             .then(function(res) {
                 if (!res.ok) throw new Error('Proxy returned ' + res.status);
-                return res.json();
+                return res;
             })
             .then(function(data) {
-                if (!data.contents) throw new Error('Empty proxy response');
-                return parseRSSFeed(data.contents);
+                return data.text();
+            })
+            .then(function(text) {
+                if (!text) throw new Error('Empty proxy response');
+                return parseRSSFeed(text);
             })
             .then(function(articles) {
                 setNewsCache(_newsCurrentUid, articles);
