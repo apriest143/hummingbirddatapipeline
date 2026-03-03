@@ -32,7 +32,7 @@
         #sidebar-toggle { position: absolute; top: 12px; z-index: 1001; left: 370px; width: 32px; height: 32px; background: var(--surface); border: 1px solid var(--border); border-left: none; border-radius: 0 6px 6px 0; color: var(--text2); cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: left 0.3s ease; }
         #sidebar.collapsed + #sidebar-toggle { left: 0; }
         .sidebar-header { padding: 20px; border-bottom: 1px solid var(--border); background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%); }
-        .sidebar-header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; background: linear-gradient(135deg, var(--accent2), #74b9ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .sidebar-header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; background: linear-gradient(135deg, var(--accent2), #74b9ff); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
         .sidebar-header p { font-size: 11px; color: var(--text2); margin-top: 4px; }
         .sidebar-body { flex: 1; overflow-y: auto; padding: 16px; }
         .sidebar-body::-webkit-scrollbar { width: 4px; }
@@ -92,10 +92,11 @@
         .map-legend .row { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 11px; }
         .map-legend .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
         .map-legend .ring { width: 10px; height: 10px; border-radius: 50%; border: 2px dashed; flex-shrink: 0; }
-        .leaflet-popup-content-wrapper { background: var(--surface) !important; color: var(--text) !important; border: 1px solid var(--border) !important; border-radius: 12px !important; box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important; }
+        .leaflet-popup-content-wrapper { background: var(--surface) !important; color: var(--text) !important; border: 1px solid var(--border) !important; border-radius: 12px !important; box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important; max-height: 90vh; display: flex; flex-direction: column; overflow: visible; }
         .leaflet-popup-tip { background: var(--surface) !important; border: 1px solid var(--border) !important; }
-        .leaflet-popup-content { margin: 0 !important; padding: 0 !important; width: 380px !important; }
-        .popup-head { padding: 16px; border-radius: 12px 12px 0 0; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-bottom: 1px solid var(--border); }
+        .leaflet-popup-content { margin: 0 !important; padding: 0 !important; width: 380px !important; display: flex; flex-direction: column; max-height: 90vh; overflow: visible; }
+        .popup-wrap { display: flex; flex-direction: column; max-height: 90vh; border-radius: 12px; overflow: hidden; }
+        .popup-head { padding: 16px; border-radius: 12px 12px 0 0; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-bottom: 1px solid var(--border); flex-shrink: 0; }
         .popup-head.critical { background: linear-gradient(135deg, #2d1117 0%, #3b1520 100%); border-bottom-color: var(--critical); }
         .popup-head.high { background: linear-gradient(135deg, #2d2011 0%, #3b2815 100%); border-bottom-color: var(--high); }
         .popup-head.likely-closed { background: linear-gradient(135deg, #1c1c24 0%, #22222e 100%); border-bottom-color: var(--closed-border); }
@@ -191,7 +192,8 @@
         /* ── News button in popup head ───────────────────── */
         .popup-news-btn { position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: var(--text2); cursor: pointer; font-size: 13px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; z-index: 10; }
         .popup-news-btn:hover { background: rgba(255,255,255,0.13); color: var(--text); border-color: rgba(255,255,255,0.3); }
-        .popup-head { position: relative; }
+        .popup-content { padding: 12px; flex: 1; overflow-y: auto; min-height: 0; }
+        .popup-content .spark-chart-wrap { overflow: visible; }
     </style>
 </head>
 <body>
@@ -227,7 +229,7 @@
             <div class="section"><div class="section-label">Search</div><div class="search-box"><span class="icon">⌕</span><input type="text" id="searchInput" placeholder="Find an institution..." autocomplete="off"><div id="searchResults"></div></div></div>
             <div class="section"><div class="section-label">Data Source</div><div class="tabs"><div class="tab active" data-val="" onclick="setTab(this,'source')">All</div><div class="tab" data-val="IPEDS" onclick="setTab(this,'source')">IPEDS</div><div class="tab" data-val="Hummingbird_990" onclick="setTab(this,'source')">990</div></div></div>
             <div class="section"><div class="section-label">Color By</div><div class="color-tabs" id="colorTabs"><div class="color-tab active" data-mode="distress" onclick="setColorMode(this)">Distress</div><div class="color-tab" data-mode="ml_risk" onclick="setColorMode(this)">ML Risk</div><div class="color-tab" data-mode="source" onclick="setColorMode(this)">Source</div><div class="color-tab" data-mode="type" onclick="setColorMode(this)">Type</div></div></div>
-            <div class="section"><div class="section-label">Institution Type</div><select id="fType"><option value="">All Types</option><optgroup label="Higher Education (IPEDS)"><option value="Public | 4-year">Public 4-Year</option><option value="Public | 2-year">Public 2-Year</option><option value="Private Non-Profit | 4-year">Private NP 4-Year</option><option value="Private Non-Profit | 2-year">Private NP 2-Year</option><option value="Private For-Profit | 4-year">Private FP 4-Year</option><option value="Private For-Profit | 2-year">Private FP 2-Year</option></optgroup><optgroup label="BMF / 990"><option value="Religious Institution">Religious</option><option value="Recreation/Camp">Recreation/Camp</option><option value="Educational Institution">Educational</option><option value="Youth Development">Youth Development</option><option value="Human Services">Human Services</option><option value="Environmental/Conservation">Environmental</option><option value="Animal/Wildlife">Animal/Wildlife</option><option value="Agriculture/Farm">Agriculture/Farm</option><option value="Housing/Residential">Housing/Residential</option><option value="Other Nonprofit">Other Nonprofit</option></optgroup></select></div>
+            <div class="section"><div class="section-label">Institution Type</div><select id="fType"><option value="">All Types</option><option value="__higher_ed__">All Higher Education</option><optgroup label="Higher Education (IPEDS)"><option value="Public | 4-year">Public 4-Year</option><option value="Public | 2-year">Public 2-Year</option><option value="Private Non-Profit | 4-year">Private NP 4-Year</option><option value="Private Non-Profit | 2-year">Private NP 2-Year</option><option value="Private For-Profit | 4-year">Private FP 4-Year</option><option value="Private For-Profit | 2-year">Private FP 2-Year</option></optgroup><optgroup label="BMF / 990"><option value="Religious Institution">Religious</option><option value="Recreation/Camp">Recreation/Camp</option><option value="Educational Institution">Educational</option><option value="Youth Development">Youth Development</option><option value="Human Services">Human Services</option><option value="Environmental/Conservation">Environmental</option><option value="Animal/Wildlife">Animal/Wildlife</option><option value="Agriculture/Farm">Agriculture/Farm</option><option value="Housing/Residential">Housing/Residential</option><option value="Other Nonprofit">Other Nonprofit</option></optgroup></select></div>
             <div class="section"><div class="section-label">Risk Filter</div><select id="fRisk"><option value="">All Levels</option><optgroup label="Distress Score"><option value="critical">Critical Only</option><option value="high_plus">High + Critical</option><option value="moderate_plus">Moderate+</option><option value="distressed_40">Score 40+</option></optgroup><optgroup label="ML Risk (IPEDS)"><option value="ml_critical">ML Critical</option><option value="ml_high">ML High+</option><option value="ml_any_warnings">Has ML Warnings</option></optgroup><optgroup label="Status"><option value="likely_closed">Likely Closed Only</option><option value="active_only">Active Only (hide closed)</option></optgroup></select></div>
             <div class="section"><div class="section-label">Special Filters</div><select id="fSpecial"><option value="">No Special Filter</option><option value="operating_loss">💸 Operating Losses</option><option value="negative_equity">🔴 Negative Net Assets</option><option value="high_debt">🏦 High Debt Ratio</option><option value="revenue_decline">📉 Revenue Decline</option><option value="consecutive_losses">📉 Consecutive Losses</option><option value="has_property">🏗 Has Property Data</option><option value="land_grant">🏛️ Land Grant</option></select></div>
             <div class="section"><div class="section-label">Acreage</div><select id="fAcreage"><option value="">Any Acreage</option><option value="20">20+ acres</option><option value="40">40+ acres</option><option value="60">60+ acres</option><option value="100">100+ acres</option><option value="200">200+ acres</option></select></div>
@@ -273,6 +275,21 @@
         'Housing/Residential':'#a29bfe','Other Nonprofit':'#8b8fa3'
     };
 
+    // Fix double-UTF-8 encoded characters (em dash etc.) that appear as garbled Latin-1 sequences
+    function fixEncoding(str) {
+        if (!str) return str;
+        try {
+            // Convert the string char-by-char through latin1 bytes back to UTF-8
+            var bytes = new Uint8Array(str.length);
+            for (var i = 0; i < str.length; i++) bytes[i] = str.charCodeAt(i) & 0xff;
+            return new TextDecoder('utf-8').decode(bytes);
+        } catch(e) { return str; }
+    }
+    function fixRow(r) {
+        if (r.ml_warning_flags) r.ml_warning_flags = fixEncoding(r.ml_warning_flags);
+        return r;
+    }
+
     function flag(r, field) {
         var val = r[field];
         if (val === undefined || val === null || val === '') return false;
@@ -305,7 +322,7 @@
         Papa.parse('Hummingbird_Master_Combined_v6.csv', {
             download:true, header:true, skipEmptyLines:true,
             complete:function(res) {
-                allData = res.data;
+                allData = res.data.map(fixRow);
                 allData.forEach(function(r) {
                     if (!r.distress_category || r.distress_category.trim() === '') {
                         r.distress_category = r.distress_category_990 || '';
@@ -334,7 +351,7 @@
 
                 showMarkers(plotData);
             },
-            error:function(){alert('Error loading CSV. Place Hummingbird_Master_Combined_v6.csv in the same folder.');}
+            error:function(){alert('Error loading CSV. Place Hummingbird_Master_Combined_v5.csv in the same folder.');}
         });
     }
 
@@ -554,9 +571,11 @@
             if(flagCount>0){
                 wHtml+='<div class="warning-list">';
                 wi.forEach(function(f){
-                    var c=f.indexOf('CRITICAL')>=0?'crit':'warn';
-                    var i=f.indexOf('CRITICAL')>=0?'🔴':'🟡';
-                    wHtml+='<div class="warning-item '+c+'"><span style="flex-shrink:0;font-size:12px">'+i+'</span><span style="color:var(--text)">'+f+'</span></div>';
+                    var clean=f.trim();
+                    var isCrit=clean.indexOf('CRITICAL')>=0;
+                    var cls=isCrit?'crit':'warn';
+                    var icon=isCrit?'\uD83D\uDD34':'\uD83D\uDFE1';
+                    wHtml+='<div class="warning-item '+cls+'"><span style="flex-shrink:0;font-size:12px">'+icon+'</span><span style="color:var(--text)">'+clean+'</span></div>';
                 });
                 wHtml+='</div>';
             } else if(!isNaN(ml) && ml<0.15){
@@ -620,11 +639,28 @@
         fin+=gi('Debt Ratio',ratio(r.debt_ratio))+gi('Rev 2yr Δ',pct(r.revenue_2yr_pct));
         if(isIPEDS){fin+=gi('Tuition Dep.',ratio(r.tuition_dependency));if(v(r.endowment_per_fte))fin+=gi('Endow./FTE',money(r.endowment_per_fte));}
         if(v(r.long_term_debt))fin+=gi('LT Debt',money(r.long_term_debt));
-        fin+='</div><div class="spark">';
-        fin+='<div class="spark-bar" style="height:'+(r22/mx*100)+'%;background:var(--accent)"></div>';
-        fin+='<div class="spark-bar" style="height:'+(r23/mx*100)+'%;background:var(--accent2)"></div>';
-        fin+='<div class="spark-bar" style="height:'+(r24/mx*100)+'%;background:'+(r24<r22?'var(--critical)':'var(--low)')+'"></div>';
-        fin+='</div><div class="spark-labels"><span>2022</span><span>2023</span><span>2024</span></div></div></div>';
+        // Revenue bar chart
+        var revBars=[{yr:'2022',val:r22,prev:null},{yr:'2023',val:r23,prev:r22},{yr:'2024',val:r24,prev:r23}];
+        fin+='</div>';
+        if(mx>1){
+            var CHART_H=60;
+            fin+='<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:8px">';
+            fin+='<div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Revenue Trend (2022–2024)</div>';
+            fin+='<div style="display:flex;align-items:flex-end;gap:8px;height:'+CHART_H+'px">';
+            revBars.forEach(function(b){
+                if(b.val<=0)return;
+                var px=Math.max(Math.round(b.val/mx*CHART_H),4);
+                var barC=b.prev===null?'var(--accent2)':(b.val>=b.prev?'var(--low)':'var(--critical)');
+                var lbl=b.val>=1e9?'$'+(b.val/1e9).toFixed(1)+'B':b.val>=1e6?'$'+(b.val/1e6).toFixed(0)+'M':'$'+(b.val/1e3).toFixed(0)+'K';
+                fin+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">';
+                fin+='<div style="font-size:8px;color:var(--text2);font-family:var(--mono);white-space:nowrap">'+lbl+'</div>';
+                fin+='<div style="width:100%;height:'+px+'px;background:'+barC+';border-radius:3px 3px 0 0"></div>';
+                fin+='<div style="font-size:9px;color:var(--text2)">'+b.yr+'</div>';
+                fin+='</div>';
+            });
+            fin+='</div></div>';
+        }
+        fin+='</div></div>';
 
         // Enrollment (IPEDS only)
         var enr='';
@@ -637,7 +673,27 @@
             if(v(r.yield_rate))enr+=gi('Yield Rate',ratio(r.yield_rate));
             if(v(r.tuition_2025))enr+=gi('Tuition \'25',money(r.tuition_2025));
             if(v(r.student_faculty_ratio))enr+=gi('Stu:Fac','<div class="pgrid-val">'+r.student_faculty_ratio+':1</div>');
-            enr+='</div></div></div>';
+            enr+='</div>';
+            var e22=parseFloat(r.enrollment_2022)||0,e23=parseFloat(r.enrollment_2023)||0,e24=parseFloat(r.enrollment_2024)||0,eMax=Math.max(e22,e23,e24,1);
+            if(eMax>1){
+                var eBars=[{yr:'2022',val:e22,prev:null},{yr:'2023',val:e23,prev:e22},{yr:'2024',val:e24,prev:e23}];
+                enr+='<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:8px">';
+                enr+='<div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Enrollment Trend (2022–2024)</div>';
+                enr+='<div style="display:flex;align-items:flex-end;gap:8px;height:60px">';
+                eBars.forEach(function(b){
+                    if(b.val<=0)return;
+                    var px=Math.max(Math.round(b.val/eMax*60),4);
+                    var barC=b.prev===null?'var(--accent2)':(b.val>=b.prev?'var(--low)':'var(--critical)');
+                    var lbl=b.val>=1000?(b.val/1000).toFixed(1)+'k':Math.round(b.val).toString();
+                    enr+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">';
+                    enr+='<div style="font-size:8px;color:var(--text2);font-family:var(--mono);white-space:nowrap">'+lbl+'</div>';
+                    enr+='<div style="width:100%;height:'+px+'px;background:'+barC+';border-radius:3px 3px 0 0"></div>';
+                    enr+='<div style="font-size:9px;color:var(--text2)">'+b.yr+'</div>';
+                    enr+='</div>';
+                });
+                enr+='</div></div>';
+            }
+            enr+='</div></div>';
         }
 
         // Property
@@ -668,12 +724,12 @@
         // Assemble — closed name is dimmed
         var nameHtml = closed ? '<h3 class="dimmed">⬡ '+name+'</h3>' : '<h3>'+name+'</h3>';
         var uid = r.unitid || '';
-        var newsBtnHtml = '<button class="popup-news-btn" onclick="openNewsPanel(\'' + uid + '\')" title="Load news for this institution">📰</button>';
-        return '<div>'
+        var newsBtnHtml = '<button class="popup-news-btn" onclick="openNewsPanel(\'' + uid + '\')" title="Load news for this institution">\uD83D\uDCF0</button>';
+        return '<div class="popup-wrap">'
             +'<div class="popup-head '+headClass+'">'+nameHtml+newsBtnHtml
             +'<div class="popup-loc">'+locParts.join('<br>')+'</div>'
             +'<div class="popup-badges">'+badges+'</div></div>'
-            +'<div class="popup-content" style="padding:12px;max-height:400px;overflow-y:auto">'
+            +'<div class="popup-content" style="padding:12px;flex:1;overflow-y:auto;min-height:0">'
             +meterHtml+closedNotice+compBar+tierHtml+chHtml+subHtml+wHtml+fin+enr+prop+ids
             +'</div></div>';
     }
@@ -740,7 +796,7 @@
             if(closed && !showClosed && f.risk !== 'likely_closed') return false;
 
             if(f.source&&r.data_source!==f.source)return false;
-            if(f.type&&r.institution_type!==f.type)return false;
+            if(f.type){if(f.type==='__higher_ed__'){var it=r.institution_type||'';var isHE=it.indexOf('Public |')>=0||it.indexOf('Private Non-Profit |')>=0||it.indexOf('Private For-Profit |')>=0;if(!isHE)return false;}else{if(r.institution_type!==f.type)return false;}}
 
             // Status filters
             if(f.risk==='likely_closed') return closed;
@@ -1047,6 +1103,8 @@
 
         body.innerHTML = html;
     }
+
+
 
 
     </script>

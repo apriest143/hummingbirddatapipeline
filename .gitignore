@@ -8,3 +8,7 @@ git push
 key.env
 *.csv
 unmatched_with_data_*.csv
+
+hv_master_data/data/990s/
+hv_master_data/data/IPEDS/
+hv_master_data/ipeds_scripts/
