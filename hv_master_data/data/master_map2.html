@@ -189,6 +189,46 @@
         .news-byline { font-size: 10px; color: var(--text2); margin-top: 4px; display: flex; gap: 8px; flex-wrap: wrap; }
         .news-byline .news-source { color: var(--accent2); }
         .news-error { padding: 14px; background: rgba(255,71,87,0.08); border: 1px solid rgba(255,71,87,0.2); border-radius: 8px; font-size: 11px; color: var(--critical); line-height: 1.5; }
+
+        /* ── News panel tabs ──────────────────────────────────── */
+        .news-tabs { display: flex; gap: 4px; margin-top: 10px; }
+        .news-tab { flex: 1; padding: 6px 4px; text-align: center; cursor: pointer; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--text2); transition: all 0.2s; }
+        .news-tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+        .news-tab:hover:not(.active) { background: var(--surface2); color: var(--text); }
+        /* ── Temperature bar ──────────────────────────────────── */
+        .temp-bar-wrap { padding: 10px 12px; background: var(--bg); border-radius: 8px; margin: 0 0 12px 0; }
+        .temp-bar-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .temp-bar-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text2); }
+        .temp-score { font-family: var(--mono); font-size: 14px; font-weight: 700; }
+        .temp-score.negative { color: var(--critical); }
+        .temp-score.neutral  { color: var(--text2); }
+        .temp-score.positive { color: var(--low); }
+        .temp-bucket { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 10px; }
+        .temp-bucket.negative { background: rgba(255,71,87,0.15); color: var(--critical); }
+        .temp-bucket.neutral  { background: rgba(139,143,163,0.15); color: var(--text2); }
+        .temp-bucket.positive { background: rgba(16,185,129,0.15); color: var(--low); }
+        .temp-track { height: 6px; background: var(--border); border-radius: 3px; position: relative; }
+        .temp-fill  { height: 100%; border-radius: 3px; position: absolute; }
+        .temp-center { position: absolute; top: -2px; left: 50%; width: 2px; height: 10px; background: var(--border); border-radius: 1px; }
+        .temp-meta { font-size: 9px; color: var(--text2); margin-top: 5px; }
+        /* ── ProPublica section ───────────────────────────────── */
+        .pp-section { margin-bottom: 10px; }
+        .pp-section-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text2); padding: 6px 0; border-bottom: 1px solid var(--border); margin-bottom: 8px; cursor: pointer; display: flex; justify-content: space-between; }
+        .pp-mission { font-size: 11px; color: var(--text); line-height: 1.5; padding: 8px; background: var(--bg); border-radius: 6px; border-left: 3px solid var(--accent); }
+        .pp-kv { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .pp-kv-item { padding: 7px 8px; background: var(--bg); border-radius: 6px; }
+        .pp-kv-label { font-size: 9px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
+        .pp-kv-val { font-family: var(--mono); font-size: 12px; font-weight: 600; margin-top: 2px; }
+        .pp-exec-item { display: flex; justify-content: space-between; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--border); }
+        .pp-exec-item:last-child { border-bottom: none; }
+        .pp-exec-name { font-size: 11px; font-weight: 600; }
+        .pp-exec-title { font-size: 9px; color: var(--text2); margin-top: 1px; }
+        .pp-exec-comp { font-family: var(--mono); font-size: 11px; color: var(--accent2); white-space: nowrap; }
+        .pp-loading { display: flex; align-items: center; gap: 8px; color: var(--text2); font-size: 11px; padding: 16px 0; }
+        .pp-spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
+        .pp-error { font-size: 11px; color: var(--text2); padding: 16px 0; text-align: center; line-height: 1.6; }
+        .pp-link { font-size: 10px; color: var(--accent2); text-decoration: none; }
+        .pp-link:hover { text-decoration: underline; }
         /* ── News button in popup head ───────────────────── */
         .popup-news-btn { position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: var(--text2); cursor: pointer; font-size: 13px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; z-index: 10; }
         .popup-news-btn:hover { background: rgba(255,255,255,0.13); color: var(--text); border-color: rgba(255,255,255,0.3); }
@@ -206,17 +246,27 @@
                     <div class="news-panel-title" id="news-panel-title">Institution News</div>
                     <div class="news-panel-sub" id="news-panel-sub">Select an institution and fetch news</div>
                 </div>
-                <button class="news-close-btn" onclick="closeNewsPanel()" title="Close">u2715</button>
+                <button class="news-close-btn" onclick="closeNewsPanel()" title="Close">&#x2715;</button>
             </div>
-            <div class="news-fetch-bar">
-                <button class="news-fetch-btn" id="news-fetch-btn" onclick="fetchNews()" disabled>📰 Fetch News</button>
+            <div class="news-tabs">
+                <div class="news-tab active" id="tab-news" onclick="switchNewsTab('news')">&#128240; News</div>
+                <div class="news-tab" id="tab-pp" onclick="switchNewsTab('pp')">&#128203; Org Data</div>
+            </div>
+            <div class="news-fetch-bar" id="news-fetch-bar">
+                <button class="news-fetch-btn" id="news-fetch-btn" onclick="fetchNews()" disabled>&#128240; Fetch News</button>
                 <div class="news-fetch-meta" id="news-fetch-meta"></div>
             </div>
         </div>
         <div class="news-body" id="news-body">
             <div class="news-empty">
-                <div class="news-empty-icon">📰</div>
-                Click the <strong>📰</strong> button on any institution popup to load news here.
+                <div class="news-empty-icon">&#128240;</div>
+                Click the <strong>&#128240;</strong> button on any institution popup to load news here.
+            </div>
+        </div>
+        <div class="news-body" id="pp-body" style="display:none">
+            <div class="news-empty">
+                <div class="news-empty-icon">&#128203;</div>
+                Open an institution to load org data.
             </div>
         </div>
     </div>
@@ -643,19 +693,19 @@
         var revBars=[{yr:'2022',val:r22,prev:null},{yr:'2023',val:r23,prev:r22},{yr:'2024',val:r24,prev:r23}];
         fin+='</div>';
         if(mx>1){
-            var CHART_H=60;
+            var CHART_H=56;
             fin+='<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:8px">';
-            fin+='<div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Revenue Trend (2022–2024)</div>';
-            fin+='<div style="display:flex;align-items:flex-end;gap:8px;height:'+CHART_H+'px">';
+            fin+='<div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Revenue Trend (2022–2024)</div>';
+            fin+='<div style="display:flex;align-items:flex-end;gap:8px;height:'+(CHART_H+30)+'px;padding-top:18px;box-sizing:border-box">';
             revBars.forEach(function(b){
                 if(b.val<=0)return;
                 var px=Math.max(Math.round(b.val/mx*CHART_H),4);
                 var barC=b.prev===null?'var(--accent2)':(b.val>=b.prev?'var(--low)':'var(--critical)');
                 var lbl=b.val>=1e9?'$'+(b.val/1e9).toFixed(1)+'B':b.val>=1e6?'$'+(b.val/1e6).toFixed(0)+'M':'$'+(b.val/1e3).toFixed(0)+'K';
-                fin+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">';
-                fin+='<div style="font-size:8px;color:var(--text2);font-family:var(--mono);white-space:nowrap">'+lbl+'</div>';
-                fin+='<div style="width:100%;height:'+px+'px;background:'+barC+';border-radius:3px 3px 0 0"></div>';
-                fin+='<div style="font-size:9px;color:var(--text2)">'+b.yr+'</div>';
+                fin+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%;justify-content:flex-end">';
+                fin+='<div style="font-size:8px;color:var(--text2);font-family:var(--mono);white-space:nowrap;flex-shrink:0">'+lbl+'</div>';
+                fin+='<div style="width:100%;height:'+px+'px;background:'+barC+';border-radius:3px 3px 0 0;flex-shrink:0"></div>';
+                fin+='<div style="font-size:9px;color:var(--text2);flex-shrink:0">'+b.yr+'</div>';
                 fin+='</div>';
             });
             fin+='</div></div>';
@@ -679,16 +729,17 @@
                 var eBars=[{yr:'2022',val:e22,prev:null},{yr:'2023',val:e23,prev:e22},{yr:'2024',val:e24,prev:e23}];
                 enr+='<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:8px">';
                 enr+='<div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Enrollment Trend (2022–2024)</div>';
-                enr+='<div style="display:flex;align-items:flex-end;gap:8px;height:60px">';
+                var ECHART_H=56;
+                enr+='<div style="display:flex;align-items:flex-end;gap:8px;height:'+(ECHART_H+30)+'px;padding-top:18px;box-sizing:border-box">';
                 eBars.forEach(function(b){
                     if(b.val<=0)return;
-                    var px=Math.max(Math.round(b.val/eMax*60),4);
+                    var px=Math.max(Math.round(b.val/eMax*ECHART_H),4);
                     var barC=b.prev===null?'var(--accent2)':(b.val>=b.prev?'var(--low)':'var(--critical)');
                     var lbl=b.val>=1000?(b.val/1000).toFixed(1)+'k':Math.round(b.val).toString();
-                    enr+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">';
-                    enr+='<div style="font-size:8px;color:var(--text2);font-family:var(--mono);white-space:nowrap">'+lbl+'</div>';
-                    enr+='<div style="width:100%;height:'+px+'px;background:'+barC+';border-radius:3px 3px 0 0"></div>';
-                    enr+='<div style="font-size:9px;color:var(--text2)">'+b.yr+'</div>';
+                    enr+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%;justify-content:flex-end">';
+                    enr+='<div style="font-size:8px;color:var(--text2);font-family:var(--mono);white-space:nowrap;flex-shrink:0">'+lbl+'</div>';
+                    enr+='<div style="width:100%;height:'+px+'px;background:'+barC+';border-radius:3px 3px 0 0;flex-shrink:0"></div>';
+                    enr+='<div style="font-size:9px;color:var(--text2);flex-shrink:0">'+b.yr+'</div>';
                     enr+='</div>';
                 });
                 enr+='</div></div>';
@@ -697,10 +748,25 @@
         }
 
         // Property
-        var prop='<div class="psection"><div class="psection-title" onclick="toggleSection(this)">🏗 Property & Land <span style="float:right;font-size:8px">▼</span></div><div><div class="pgrid">';
-        if(v(r.verified_acres))prop+=gi('Acres','<div class="pgrid-val">'+parseFloat(r.verified_acres).toLocaleString(undefined,{maximumFractionDigits:1})+'</div>');
-        else if(v(r.acreage_raw)){var ac=parseFloat(r.acreage_raw);prop+=gi('Acreage','<div class="pgrid-val">'+(isNaN(ac)?r.acreage_raw:ac.toLocaleString(undefined,{maximumFractionDigits:1}))+'</div>');}
-        else prop+=gi('Acreage','<div class="pgrid-val" style="color:var(--text2);font-style:italic;font-family:var(--font)">Not yet verified</div>');
+        var prop='<div class="psection"><div class="psection-title" onclick="toggleSection(this)">\uD83C\uDFD7 Property & Land <span style="float:right;font-size:8px">\u25BC</span></div><div><div class="pgrid">';
+        var hasScraper=v(r.scraper_acres),hasOSM=v(r.osm_acres),hasPrimary=v(r.acreage_primary),is990=r.data_source==='Hummingbird_990';
+        if(hasPrimary&&!is990){
+            var pVal=parseFloat(r.acreage_primary).toLocaleString(undefined,{maximumFractionDigits:1});
+            var pSrc=r.acreage_primary_source==='OSM'?'OSM':'Scraper';
+            var pConf=r.acreage_primary_source==='OSM'?r.osm_confidence:r.scraper_confidence;
+            var pCol=pConf==='HIGH'?'var(--low)':pConf==='MEDIUM'?'var(--elevated)':'var(--text2)';
+            var aHtml='<div class="pgrid-val">'+pVal+'</div><div style="font-size:9px;color:'+pCol+';margin-top:2px">'+pSrc+' \u00b7 '+pConf+'</div>';
+            if(hasScraper&&hasOSM){var secSrc=r.acreage_primary_source==='OSM'?'Scraper':'OSM';var secVal=r.acreage_primary_source==='OSM'?parseFloat(r.scraper_acres).toLocaleString(undefined,{maximumFractionDigits:1}):parseFloat(r.osm_acres).toLocaleString(undefined,{maximumFractionDigits:1});var secConf=r.acreage_primary_source==='OSM'?r.scraper_confidence:r.osm_confidence;aHtml+='<div style="font-size:9px;color:var(--text2);margin-top:3px">Alt ('+secSrc+'): '+secVal+' ac \u00b7 '+secConf+'</div>';}
+            if(v(r.acreage_conflict_flag))aHtml+='<div style="font-size:9px;color:var(--high);margin-top:3px">\u26a0 '+r.acreage_conflict_flag+'</div>';
+            if(v(r.scraper_source)){var ss=r.scraper_source.length>50?r.scraper_source.substring(0,50)+'\u2026':r.scraper_source;var ssH=r.scraper_source.startsWith('http')?'<a href="'+r.scraper_source+'" target="_blank" style="color:var(--accent2);text-decoration:none">'+ss+'</a>':ss;aHtml+='<div style="font-size:9px;color:var(--text2);margin-top:3px">Source: '+ssH+'</div>';}
+            prop+=gi('Acres',aHtml);
+        }else if(is990&&(hasScraper||hasOSM)){
+            if(hasScraper){var sV=parseFloat(r.scraper_acres).toLocaleString(undefined,{maximumFractionDigits:1});var sC=r.scraper_confidence||'';var sCl=sC==='HIGH'?'var(--low)':sC==='MEDIUM'?'var(--elevated)':'var(--text2)';var sH='<div class="pgrid-val">'+sV+'</div><div style="font-size:9px;color:'+sCl+';margin-top:2px">Scraper \u00b7 '+sC+'</div>';if(v(r.scraper_source)){var ss2=r.scraper_source.length>50?r.scraper_source.substring(0,50)+'\u2026':r.scraper_source;sH+='<div style="font-size:9px;color:var(--text2);margin-top:2px">'+(r.scraper_source.startsWith('http')?'<a href="'+r.scraper_source+'" target="_blank" style="color:var(--accent2);text-decoration:none">'+ss2+'</a>':ss2)+'</div>';}prop+=gi('Acres (Scraper)',sH);}
+            if(hasOSM){var oV=parseFloat(r.osm_acres).toLocaleString(undefined,{maximumFractionDigits:1});var oC=r.osm_confidence||'';var oCl=oC==='HIGH'?'var(--low)':oC==='MEDIUM'?'var(--elevated)':'var(--text2)';var oH='<div class="pgrid-val">'+oV+'</div><div style="font-size:9px;color:'+oCl+';margin-top:2px">OSM \u00b7 '+oC+'</div>';if(v(r.osm_feature_name))oH+='<div style="font-size:9px;color:var(--text2);margin-top:2px">Feature: '+r.osm_feature_name+'</div>';prop+=gi('Acres (OSM)',oH);}
+            if(v(r.acreage_conflict_flag))prop+=gi('\u26a0 Conflict','<div style="font-size:9px;color:var(--high)">'+r.acreage_conflict_flag+'</div>');
+        }else{
+            prop+=gi('Acreage','<div class="pgrid-val" style="color:var(--text2);font-style:italic;font-family:var(--font)">Not yet verified</div>');
+        }
         if(v(r.land_book_value))prop+=gi('Land Value',money(r.land_book_value));
         if(v(r.plant_property_equipment))prop+=gi('PP&E',money(r.plant_property_equipment));
         if(v(r.long_term_debt))prop+=gi('LT Debt',money(r.long_term_debt));
@@ -723,8 +789,17 @@
 
         // Assemble — closed name is dimmed
         var nameHtml = closed ? '<h3 class="dimmed">⬡ '+name+'</h3>' : '<h3>'+name+'</h3>';
-        var uid = r.unitid || '';
-        var newsBtnHtml = '<button class="popup-news-btn" onclick="openNewsPanel(\'' + uid + '\')" title="Load news for this institution">\uD83D\uDCF0</button>';
+        var uid = r.unitid ? ('ipeds_' + r.unitid) : ('ein_' + (r.ein || ''));
+        var _attr = function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); };
+        var newsBtnHtml = '<button class="popup-news-btn"'
+            + ' data-uid="'    + _attr(uid) + '"'
+            + ' data-name="'   + _attr(r.institution_name||'') + '"'
+            + ' data-city="'   + _attr(r.city||'') + '"'
+            + ' data-state="'  + _attr(r.state||'') + '"'
+            + ' data-source="' + _attr(r.data_source||'') + '"'
+            + ' data-ein="'    + _attr(r.ein||'') + '"'
+            + ' onclick="openNewsPanelFromBtn(this)"'
+            + ' title="Load news &amp; org data">&#128240;</button>';
         return '<div class="popup-wrap">'
             +'<div class="popup-head '+headClass+'">'+nameHtml+newsBtnHtml
             +'<div class="popup-loc">'+locParts.join('<br>')+'</div>'
@@ -817,7 +892,7 @@
             if(f.special==='consecutive_losses'&&!flag(r,'flag_990_consecutive_losses'))return false;
             if(f.special==='has_property'&&!flag(r,'has_property_data'))return false;
             if(f.special==='land_grant'&&r.is_land_grant!=='Land Grant Institution')return false;
-            if(f.acreage){var minAcres=parseFloat(f.acreage);var acres=parseFloat(r.verified_acres)||parseFloat(r.acreage_raw)||0;if(acres<minAcres)return false;}
+            if(f.acreage){var minAcres=parseFloat(f.acreage);var acres=parseFloat(r.acreage_primary)||parseFloat(r.scraper_acres)||parseFloat(r.osm_acres)||0;if(acres<minAcres)return false;}
             return true;
         });
         showMarkers(filtered);
@@ -843,269 +918,403 @@
 
 
     // =========================================================================
-    // NEWS PANEL \u2014 Google News RSS via corsproxy.io
-    // No API key required. Works from any file:// or http:// context.
+    // NEWS PANEL - Google News RSS + ProPublica Nonprofit Explorer
+    // No API keys required. Works from file:// or http:// context.
     // =========================================================================
 
-    var _newsCurrentUid  = null;
-    var _newsCurrentName = null;
+    var _newsCurrentUid    = null;
+    var _newsCurrentName   = null;
+    var _newsCurrentCity   = null;
+    var _newsCurrentState  = null;
+    var _newsCurrentSource = null;
+    var _newsCurrentEin    = null;
+    var _newsActiveTab     = 'news';
 
-    // Signal classification \u2014 scans headline + snippet text
     var NEWS_SIGNALS = {
         closure: {
-            label: 'Closure Signal',
-            color: '#ff4757',
-            keywords: ['clos','shut down','teach-out','ceasing operations','wind down','discontinu','merger','acqui','closing']
+            label: 'Closure / M&A', color: '#ff4757', weight: -60,
+            // Use specific multi-word phrases or unambiguous stems only.
+            // Avoid bare 'clos' — catches 'closet','closer','close roads' etc.
+            keywords: ['closure','closed permanently','closing permanently','closed its doors',
+                       'college closing','university closing','campus closing','school closing',
+                       'college closed','university closed','campus closed',
+                       'is closing down','shut down','shutdown',
+                       'teach-out','teach out','ceasing operations','wind down','wind-down',
+                       'discontinuing operations','merger','merging with','merged with',
+                       'acquisition','acquired by','consolidat',
+                       'sale of campus','sell campus','ceases operation',
+                       'no longer enrolling','suspending operations',
+                       'dissolution','dissolving','dissolved']
         },
         accreditation: {
-            label: 'Accreditation',
-            color: '#ff6b35',
-            keywords: ['accreditation','hlc','sacscoc','neche','wscuc','nwccu','sacs','probation','sanctions','show cause']
+            label: 'Accreditation', color: '#ff6b35', weight: -35,
+            keywords: ['accreditation','hlc','sacscoc','neche','wscuc','nwccu','neasc','sacs',
+                       'probation','sanctions','show cause','warning notice',
+                       'loss of accreditation','accreditor','reaffirmation denied',
+                       'withdraw accreditation']
         },
         financial: {
-            label: 'Financial Distress',
-            color: '#ffa502',
-            keywords: ['deficit','budget cut','layoff','restructur','financial difficult','bankruptcy','default','debt']
+            label: 'Financial Distress', color: '#ffa502', weight: -25,
+            keywords: ['budget deficit','budget cut','budget gap','layoff','lay off','restructur',
+                       'financial difficult','bankruptcy','default','furlough',
+                       'program cut','program eliminat','program suspension',
+                       'financial crisis','insolvenc','revenue shortfall','financial strain',
+                       'cost-cutting','cost cutting','endowment loss','bond downgrade',
+                       'credit downgrade','emergency budget','fiscal crisis',
+                       'operating loss','financial trouble','financial challenge']
+        },
+        enrollment: {
+            label: 'Enrollment / Demand', color: '#a29bfe', weight: -20,
+            keywords: ['enrollment declin','enrollment drop','enrollment fell','enrollment fall',
+                       'declining enrollment','fewer students','student shortage',
+                       'falling enrollment','enrollment loss','enrollment down',
+                       'admissions declin','yield drop','demographic cliff',
+                       'low enrollment','under-enrolled','headcount declin']
+        },
+        positive: {
+            label: 'Positive Signal', color: '#10b981', weight: 25,
+            keywords: ['record enrollment','enrollment growth','enrollment increase','enrollment up',
+                       'enrollment rose','new program','expansion','new campus','investment',
+                       'grant award','accreditation reaffirm','financial strength','surplus',
+                       'endowment growth','endowment increase','partnership','strategic plan',
+                       'milestone','excellence','bond upgrade','credit upgrade',
+                       'record applicant','applications up','strong demand',
+                       'new building','capital campaign','fundraising goal']
         }
     };
 
+    function recencyWeight(dateStr) {
+        if (!dateStr) return 0.1;
+        var age = (Date.now() - new Date(dateStr).getTime()) / 86400000;
+        if (age <=  30) return 1.0;
+        if (age <=  90) return 0.6;
+        if (age <= 180) return 0.3;
+        if (age <= 365) return 0.15;
+        return 0.05;
+    }
+
     function classifyArticle(title, snippet) {
-        var text = ((title || '') + ' ' + (snippet || '')).toLowerCase();
-        var types = Object.keys(NEWS_SIGNALS);
-        for (var i = 0; i < types.length; i++) {
-            var kws = NEWS_SIGNALS[types[i]].keywords;
+        var text = ((title||'') + ' ' + (snippet||'')).toLowerCase();
+        var order = ['closure','accreditation','financial','enrollment','positive'];
+        for (var i = 0; i < order.length; i++) {
+            var kws = NEWS_SIGNALS[order[i]].keywords;
             for (var j = 0; j < kws.length; j++) {
-                if (text.indexOf(kws[j]) >= 0) return types[i];
+                if (text.indexOf(kws[j]) >= 0) return order[i];
             }
         }
         return 'general';
     }
 
-    function newsCacheKey(uid) { return 'hb_news_v2_' + uid; }
-
-    function getNewsCache(uid) {
-        try {
-            var raw = localStorage.getItem(newsCacheKey(uid));
-            if (!raw) return null;
-            return JSON.parse(raw);
-        } catch(e) { return null; }
+    function computeTemperature(articles) {
+        if (!articles || !articles.length) return null;
+        var raw = 0, tw = 0;
+        articles.forEach(function(a) {
+            var sig = NEWS_SIGNALS[a.signal];
+            if (!sig) return;
+            var rw = recencyWeight(a.date);
+            raw += sig.weight * rw;
+            tw  += rw;
+        });
+        if (!tw) return null;
+        return Math.max(-100, Math.min(100, Math.round(raw)));
     }
 
-    function setNewsCache(uid, articles) {
-        try {
-            localStorage.setItem(newsCacheKey(uid), JSON.stringify({
-                ts: Date.now(),
-                articles: articles
-            }));
-        } catch(e) {}
+    function temperatureBucket(score) {
+        if (score === null) return { label: 'Insufficient signal', cls: 'neutral' };
+        if (score <= -20)   return { label: 'Negative signals detected', cls: 'negative' };
+        if (score >=  20)   return { label: 'Positive signals detected', cls: 'positive' };
+        return { label: 'Mixed / no strong signal', cls: 'neutral' };
     }
 
-    function formatCacheAge(ts) {
-        var mins = Math.floor((Date.now() - ts) / 60000);
-        if (mins < 2)  return 'just now';
-        if (mins < 60) return mins + 'm ago';
-        var hrs = Math.floor(mins / 60);
-        if (hrs < 24)  return hrs + 'h ago';
-        return Math.floor(hrs / 24) + 'd ago';
+    function renderTemperatureBar(score, n) {
+        if (score === null) return '';
+        var b   = temperatureBucket(score);
+        var pct = Math.abs(score) / 2;
+        var col = score < 0 ? 'var(--critical)' : score > 0 ? 'var(--low)' : 'var(--text2)';
+        var fillStyle = score < 0
+            ? 'right:50%;width:' + pct + '%;background:' + col
+            : 'left:50%;width:'  + pct + '%;background:' + col;
+        return '<div class="temp-bar-wrap">'
+            + '<div class="temp-bar-label">'
+            + '<span class="temp-bar-title">Signal Temperature</span>'
+            + '<div style="display:flex;align-items:center;gap:8px">'
+            + '<span class="temp-score ' + b.cls + '">' + (score > 0 ? '+' : '') + score + '</span>'
+            + '<span class="temp-bucket ' + b.cls + '">' + b.label + '</span>'
+            + '</div></div>'
+            + '<div class="temp-track">'
+            + '<div class="temp-center"></div>'
+            + '<div class="temp-fill" style="' + fillStyle + '"></div>'
+            + '</div>'
+            + '<div class="temp-meta">' + n + ' article' + (n !== 1 ? 's' : '') + ' scored \u00b7 recency-weighted</div>'
+            + '</div>';
     }
 
-    function openNewsPanel(uid) {
-        _newsCurrentUid  = uid;
-
-        // Find the matching record
-        var rec = null;
-        for (var i = 0; i < allData.length; i++) {
-            if (String(allData[i].unitid) === String(uid)) { rec = allData[i]; break; }
+    function buildNewsQuery(name, city, state, dataSource) {
+        if (dataSource === 'Hummingbird_990') {
+            // Strip legal suffixes that pollute 990 org searches
+            var q = name.replace(/\b(INC|LLC|CORP|CORPORATION|FOUNDATION|ASSOCIATION|TRUST|NFP|NPC|LTD|CO|INCORPORATED|LIMITED)\b\.?/gi, '').trim();
+            q = q.replace(/\s{2,}/g, ' ').trim();
+            // Put cleaned name in quotes, then add location OUTSIDE quotes for context
+            var loc = [city, state].filter(Boolean).join(' ');
+            return '"' + q + '"' + (loc ? ' ' + loc : '');
+        } else {
+            // IPEDS: exact name in quotes only — adding state INSIDE quotes kills results
+            // (Google treats the whole thing as a literal phrase)
+            return '"' + name + '"';
         }
-        _newsCurrentName = rec ? (rec.institution_name || uid) : uid;
+    }
 
-        // Update panel header
+    function getCache(key)       { try { var r=localStorage.getItem(key); return r?JSON.parse(r):null; } catch(e){return null;} }
+    function setCache(key, data) { try { localStorage.setItem(key, JSON.stringify({ts:Date.now(),data:data})); } catch(e){} }
+    function newsCacheKey(uid)   { return 'hb_news_v3_' + uid; }
+    function ppCacheKey(ein)     { return 'hb_pp_v1_' + ein; }
+    function formatCacheAge(ts)  {
+        var m=Math.floor((Date.now()-ts)/60000);
+        if(m<2) return 'just now';
+        if(m<60) return m+'m ago';
+        var h=Math.floor(m/60);
+        if(h<24) return h+'h ago';
+        return Math.floor(h/24)+'d ago';
+    }
+
+    function switchNewsTab(tab) {
+        _newsActiveTab = tab;
+        document.getElementById('tab-news').classList.toggle('active', tab==='news');
+        document.getElementById('tab-pp').classList.toggle('active',   tab==='pp');
+        document.getElementById('news-body').style.display      = tab==='news' ? '' : 'none';
+        document.getElementById('pp-body').style.display        = tab==='pp'   ? '' : 'none';
+        document.getElementById('news-fetch-bar').style.display = tab==='news' ? '' : 'none';
+        if (tab==='pp') loadProPublica(_newsCurrentEin);
+    }
+
+    function openNewsPanelFromBtn(btn) {
+        openNewsPanel(
+            btn.getAttribute('data-uid'),
+            btn.getAttribute('data-name'),
+            btn.getAttribute('data-city'),
+            btn.getAttribute('data-state'),
+            btn.getAttribute('data-source'),
+            btn.getAttribute('data-ein')
+        );
+    }
+
+    function openNewsPanel(uid, name, city, state, dataSource, ein) {
+        _newsCurrentUid    = uid;
+        _newsCurrentName   = name  || uid;
+        _newsCurrentCity   = city  || '';
+        _newsCurrentState  = state || '';
+        _newsCurrentSource = dataSource || '';
+        _newsCurrentEin    = ein   || '';
+        _newsActiveTab     = 'news';
+
         document.getElementById('news-panel-title').textContent = _newsCurrentName;
-        var sub = rec ? [(rec.city||''), (rec.state||'')].filter(Boolean).join(', ') : '';
-        document.getElementById('news-panel-sub').textContent = sub;
+        document.getElementById('news-panel-sub').textContent   = [city,state].filter(Boolean).join(', ');
+        document.getElementById('tab-news').classList.add('active');
+        document.getElementById('tab-pp').classList.remove('active');
+        document.getElementById('news-body').style.display      = '';
+        document.getElementById('pp-body').style.display        = 'none';
+        document.getElementById('news-fetch-bar').style.display = '';
+        document.getElementById('news-fetch-btn').disabled      = false;
 
-        var fetchBtn = document.getElementById('news-fetch-btn');
-        fetchBtn.disabled = false;
-
-        // Load from cache if available, otherwise show prompt
-        var cached = getNewsCache(uid);
+        var cached = getCache(newsCacheKey(uid));
         if (cached) {
-            var age = formatCacheAge(cached.ts);
             document.getElementById('news-fetch-meta').innerHTML =
-                'Cached ' + age + ' &nbsp;\u00B7&nbsp; <a onclick="forceRefreshNews()" style="cursor:pointer;color:var(--accent2)">\u21BB Refresh</a>';
-            renderNewsArticles(cached.articles);
+                'Cached ' + formatCacheAge(cached.ts) + ' \u00b7 ' +
+                '<a onclick="forceRefreshNews()" style="cursor:pointer;color:var(--accent2)">\u21bb Refresh</a>';
+            renderNewsArticles(cached.data);
         } else {
             document.getElementById('news-fetch-meta').innerHTML = '';
             document.getElementById('news-body').innerHTML =
-                '<div class="news-empty">'
-                + '<div class="news-empty-icon">\uD83D\uDCF0</div>'
-                + '<strong>' + _newsCurrentName + '</strong><br><br>'
-                + 'Click <strong>Fetch News</strong> to pull the latest headlines from Google News.'
-                + '</div>';
+                '<div class="news-empty"><div class="news-empty-icon">&#128240;</div>' +
+                '<strong>' + _newsCurrentName + '</strong><br><br>' +
+                'Click <strong>Fetch News</strong> to pull the latest headlines from Google News.' +
+                '</div>';
         }
-
         document.getElementById('news-panel').classList.add('open');
     }
 
-    function closeNewsPanel() {
-        document.getElementById('news-panel').classList.remove('open');
-    }
-
-    function forceRefreshNews() {
-        fetchNews(true);
-    }
+    function closeNewsPanel()   { document.getElementById('news-panel').classList.remove('open'); }
+    function forceRefreshNews() { fetchNews(true); }
 
     function fetchNews(force) {
         if (!_newsCurrentUid || !_newsCurrentName) return;
-
-        // Serve from cache unless forced refresh
         if (!force) {
-            var cached = getNewsCache(_newsCurrentUid);
-            if (cached) { renderNewsArticles(cached.articles); return; }
+            var cached = getCache(newsCacheKey(_newsCurrentUid));
+            if (cached) { renderNewsArticles(cached.data); return; }
         }
-
-        // Show loading state
         document.getElementById('news-body').innerHTML =
             '<div class="news-loading"><div class="news-spinner"></div>Fetching from Google News\u2026</div>';
         document.getElementById('news-fetch-btn').disabled = true;
         document.getElementById('news-fetch-meta').innerHTML = 'Fetching\u2026';
 
-        // Build Google News RSS URL, then wrap in allorigins proxy
-        var query = encodeURIComponent('"' + _newsCurrentName + '"');
-        var rssUrl = 'https://news.google.com/rss/search?q=' + query + '&hl=en-US&gl=US&ceid=US:en';
-        var proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(rssUrl);
+        var q   = encodeURIComponent(buildNewsQuery(_newsCurrentName,_newsCurrentCity,_newsCurrentState,_newsCurrentSource));
+        var rss = 'https://news.google.com/rss/search?q=' + q + '&hl=en-US&gl=US&ceid=US:en';
+        var url = 'https://corsproxy.io/?' + encodeURIComponent(rss);
 
-        fetch(proxyUrl)
-            .then(function(res) {
-                if (!res.ok) throw new Error('Proxy returned ' + res.status);
-                return res;
-            })
-            .then(function(data) {
-                return data.text();
-            })
-            .then(function(text) {
-                if (!text) throw new Error('Empty proxy response');
-                return parseRSSFeed(text);
-            })
-            .then(function(articles) {
-                setNewsCache(_newsCurrentUid, articles);
+        fetch(url)
+            .then(function(r){ if(!r.ok) throw new Error('Proxy '+r.status); return r.text(); })
+            .then(function(text){
+                if (!text) throw new Error('Empty response');
+                var articles = parseRSSFeed(text);
+                setCache(newsCacheKey(_newsCurrentUid), articles);
                 document.getElementById('news-fetch-btn').disabled = false;
-                var age = 'just now';
                 document.getElementById('news-fetch-meta').innerHTML =
-                    'Fetched ' + age + ' &nbsp;\u00B7&nbsp; ' + articles.length + ' results'
-                    + ' &nbsp;\u00B7&nbsp; <a onclick="forceRefreshNews()" style="cursor:pointer;color:var(--accent2)">\u21BB Refresh</a>';
+                    'Fetched just now \u00b7 ' + articles.length + ' results \u00b7 ' +
+                    '<a onclick="forceRefreshNews()" style="cursor:pointer;color:var(--accent2)">\u21bb Refresh</a>';
                 renderNewsArticles(articles);
             })
-            .catch(function(err) {
+            .catch(function(err){
                 document.getElementById('news-fetch-btn').disabled = false;
                 document.getElementById('news-fetch-meta').innerHTML = 'Error';
                 document.getElementById('news-body').innerHTML =
-                    '<div class="news-error">'
-                    + '<strong>Could not fetch news</strong><br><br>'
-                    + err.message + '<br><br>'
-                    + 'Check your internet connection and try again.'
-                    + '</div>';
+                    '<div class="news-error"><strong>Could not fetch news</strong><br><br>' +
+                    err.message + '<br><br>Check your connection and try again.</div>';
             });
     }
 
-    function parseRSSFeed(xmlString) {
-        var parser = new DOMParser();
-        var doc = parser.parseFromString(xmlString, 'application/xml');
-        var items = doc.querySelectorAll('item');
-        var articles = [];
+    function parseRSSFeed(xml) {
+        var doc = new DOMParser().parseFromString(xml, 'application/xml');
+        var out = [];
+        doc.querySelectorAll('item').forEach(function(item) {
+            var title   = (item.querySelector('title')       ||{}).textContent||'';
+            var link    = (item.querySelector('link')        ||{}).textContent||'';
+            var pubDate = (item.querySelector('pubDate')     ||{}).textContent||'';
+            var snippet = (item.querySelector('description') ||{}).textContent||'';
+            snippet = snippet.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+            var source='', m=title.match(/^(.*?)\s+-\s+([^-]+)$/);
+            if(m){ title=m[1].trim(); source=m[2].trim(); }
+            var dateStr='';
+            if(pubDate){ var d=new Date(pubDate); if(!isNaN(d)) dateStr=d.toISOString().slice(0,10); }
+            if(!title||title==='[Removed]') return;
 
-        items.forEach(function(item) {
-            var title   = (item.querySelector('title')   || {}).textContent || '';
-            var link    = (item.querySelector('link')    || {}).textContent || '';
-            var pubDate = (item.querySelector('pubDate') || {}).textContent || '';
-            var snippet = (item.querySelector('description') || {}).textContent || '';
+            // Relevance filter: require at least one higher-ed context word
+            // in title+snippet to eliminate city news, bookstore closings, etc.
+            var HE_CONTEXT = ['college','university','campus','enrollment','enroll',
+                              'students','student','faculty','academic','tuition',
+                              'accreditation','financial aid','endowment','semester',
+                              'commencement','institution','higher education','liberal arts'];
+            var fullText = (title + ' ' + snippet).toLowerCase();
+            var isRelevant = HE_CONTEXT.some(function(w){ return fullText.indexOf(w) >= 0; });
+            if (!isRelevant) return;
 
-            // Strip HTML tags from snippet
-            snippet = snippet.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-
-            // Strip " - Source" suffix Google appends to titles
-            var source = '';
-            var titleMatch = title.match(/^(.*?)\s+-\s+([^-]+)$/);
-            if (titleMatch) {
-                title  = titleMatch[1].trim();
-                source = titleMatch[2].trim();
-            }
-
-            // Format date
-            var dateStr = '';
-            if (pubDate) {
-                var d = new Date(pubDate);
-                if (!isNaN(d)) dateStr = d.toISOString().slice(0, 10);
-            }
-
-            // Skip removed/unavailable articles
-            if (!title || title === '[Removed]') return;
-
-            articles.push({
-                title:   title,
-                source:  source,
-                date:    dateStr,
-                url:     link,
-                snippet: snippet,
-                signal:  classifyArticle(title, snippet)
-            });
+            out.push({title:title,source:source,date:dateStr,url:link,snippet:snippet,
+                      signal:classifyArticle(title,snippet)});
         });
-
-        return articles;
+        return out;
     }
 
     function renderNewsArticles(articles) {
         var body = document.getElementById('news-body');
-
-        if (!articles || articles.length === 0) {
-            body.innerHTML =
-                '<div class="news-empty">'
-                + '<div class="news-empty-icon">\uD83D\uDD0D</div>'
-                + 'No recent news found for<br><strong>' + _newsCurrentName + '</strong>.'
-                + '</div>';
+        if (!articles || !articles.length) {
+            body.innerHTML = '<div class="news-empty"><div class="news-empty-icon">&#128269;</div>' +
+                'No recent news found for<br><strong>' + _newsCurrentName + '</strong>.</div>';
             return;
         }
+        var score = computeTemperature(articles);
+        var html  = renderTemperatureBar(score, articles.length);
+        var groups = {closure:[],accreditation:[],financial:[],enrollment:[],positive:[],general:[]};
+        articles.forEach(function(a){ (groups[a.signal]||(groups.general)).push(a); });
 
-        // Group by signal type \u2014 signals first, general last
-        var groups = { closure: [], accreditation: [], financial: [], general: [] };
-        articles.forEach(function(a) { groups[a.signal].push(a); });
-
-        var html = '';
-        ['closure', 'accreditation', 'financial', 'general'].forEach(function(type) {
-            var items = groups[type];
-            if (!items.length) return;
-
-            var sig   = NEWS_SIGNALS[type];
-            var label = sig ? sig.label : 'General';
-            var color = sig ? sig.color : '#8b8fa3';
-
+        ['closure','accreditation','financial','enrollment','positive','general'].forEach(function(type){
+            var items = groups[type]; if (!items.length) return;
+            var sig=NEWS_SIGNALS[type], label=sig?sig.label:'General', color=sig?sig.color:'#8b8fa3';
             html += '<div class="news-signal-group">';
-            html += '<div class="news-signal-label">'
-                + '<span class="news-signal-dot" style="background:' + color + '"></span>'
-                + label
-                + ' <span style="color:var(--text2);font-weight:400">(' + items.length + ')</span>'
-                + '</div>';
-
-            items.forEach(function(a) {
-                var itemClass = 'news-item' + (type !== 'general' ? ' signal-' + type : '');
-                html += '<div class="' + itemClass + '">';
-                html += '<div class="news-headline"><a href="' + a.url + '" target="_blank" rel="noopener">' + a.title + '</a></div>';
-                html += '<div class="news-byline">';
-                if (a.source) html += '<span class="news-source">' + a.source + '</span>';
-                if (a.date)   html += '<span>' + a.date + '</span>';
-                html += '</div>';
-                if (a.snippet) html += '<div style="font-size:10px;color:var(--text2);margin-top:4px;line-height:1.4">' + a.snippet.slice(0, 120) + (a.snippet.length > 120 ? '\u2026' : '') + '</div>';
-                html += '</div>';
+            html += '<div class="news-signal-label"><span class="news-signal-dot" style="background:'+color+'"></span>'+label+' <span style="color:var(--text2);font-weight:400">('+items.length+')</span></div>';
+            items.forEach(function(a){
+                var rw=recencyWeight(a.date);
+                var age=rw>=1.0?'recent':rw>=0.6?'1-3mo':rw>=0.3?'3-6mo':rw>=0.15?'6-12mo':'>1yr';
+                var cls='news-item'+(type!=='general'&&type!=='positive'?' signal-'+type:'');
+                var sty=type==='positive'?' style="border-left-color:var(--low);background:rgba(16,185,129,0.04)"':'';
+                html+='<div class="'+cls+'"'+sty+'>';
+                html+='<div class="news-headline"><a href="'+a.url+'" target="_blank" rel="noopener">'+a.title+'</a></div>';
+                html+='<div class="news-byline">';
+                if(a.source) html+='<span class="news-source">'+a.source+'</span>';
+                if(a.date)   html+='<span>'+a.date+'</span>';
+                html+='<span style="opacity:0.5">'+age+'</span>';
+                html+='</div>';
+                if(a.snippet) html+='<div style="font-size:10px;color:var(--text2);margin-top:4px;line-height:1.4">'+a.snippet.slice(0,140)+(a.snippet.length>140?'\u2026':'')+'</div>';
+                html+='</div>';
             });
-
-            html += '</div>';
+            html+='</div>';
         });
-
         body.innerHTML = html;
     }
 
+    // ProPublica Nonprofit Explorer
+    function loadProPublica(ein) {
+        var body = document.getElementById('pp-body');
+        if (!ein) {
+            body.innerHTML = '<div class="pp-error">No EIN available.<br>ProPublica data requires an EIN.</div>';
+            return;
+        }
+        var cached = getCache(ppCacheKey(ein));
+        if (cached) { renderProPublica(cached.data); return; }
 
+        body.innerHTML = '<div class="pp-loading"><div class="pp-spinner"></div>Loading from ProPublica\u2026</div>';
 
+        // EINs stored as floats (e.g. '10357799.0') — parse via float, then zero-pad to 9 digits
+        var cleanEin = String(parseInt(parseFloat(String(ein)), 10)).padStart(9, '0');
+        var url = 'https://corsproxy.io/?' +
+            encodeURIComponent('https://projects.propublica.org/nonprofits/api/v2/organizations/' + cleanEin + '.json');
+
+        fetch(url)
+            .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+            .then(function(json){ setCache(ppCacheKey(ein), json); renderProPublica(json); })
+            .catch(function(err){
+                body.innerHTML = '<div class="pp-error">Could not load ProPublica data.<br><br>' + err.message +
+                    '<br><br><a class="pp-link" href="https://projects.propublica.org/nonprofits/search?q=' +
+                    encodeURIComponent(_newsCurrentName) + '" target="_blank">Search manually &#8599;</a></div>';
+            });
+    }
+
+    function renderProPublica(json) {
+        var org  = json.organization || {};
+        var fils = json.filings_with_data || [];
+        var body = document.getElementById('pp-body');
+        if (!org.name) { body.innerHTML = '<div class="pp-error">No ProPublica record found for this EIN.</div>'; return; }
+
+        var fmt = function(n){ return n ? ('$'+Number(n).toLocaleString()) : '\u2014'; };
+        var tog = 'var c=this.nextElementSibling;c.style.display=c.style.display===\'none\'?\'\':\'none\'';
+        var html = '';
+
+        if (org.mission) {
+            html += '<div class="pp-section"><div class="pp-section-title" onclick="'+tog+'">Mission <span>&#9660;</span></div>';
+            html += '<div><div class="pp-mission">'+org.mission+'</div></div></div>';
+        }
+
+        var fil = fils[0] || {};
+        html += '<div class="pp-section"><div class="pp-section-title" onclick="'+tog+'">Financials <span style="font-size:9px;font-weight:400;color:var(--text2)">'+(fil.tax_prd_yr||'')+'</span> <span>&#9660;</span></div>';
+        html += '<div><div class="pp-kv">';
+        html += '<div class="pp-kv-item"><div class="pp-kv-label">Total Revenue</div><div class="pp-kv-val">'+fmt(fil.totrevenue)+'</div></div>';
+        html += '<div class="pp-kv-item"><div class="pp-kv-label">Total Expenses</div><div class="pp-kv-val">'+fmt(fil.totfuncexpns)+'</div></div>';
+        html += '<div class="pp-kv-item"><div class="pp-kv-label">Net Assets</div><div class="pp-kv-val">'+fmt(fil.net_assets)+'</div></div>';
+        html += '<div class="pp-kv-item"><div class="pp-kv-label">Total Assets</div><div class="pp-kv-val">'+fmt(fil.totassetsend)+'</div></div>';
+        html += '</div></div></div>';
+
+        var execs = fil.employees || org.key_employees || [];
+        if (execs && execs.length) {
+            html += '<div class="pp-section"><div class="pp-section-title" onclick="'+tog+'">Executive Compensation <span>&#9660;</span></div><div>';
+            execs.slice(0,8).forEach(function(e){
+                var comp=e.reportablecompfromorg||e.compensation||0;
+                var name=e.name||e.person_name||''; var title=e.title||e.titleortypeofbusiness||'';
+                if(!name) return;
+                html+='<div class="pp-exec-item"><div><div class="pp-exec-name">'+name+'</div><div class="pp-exec-title">'+title+'</div></div><div class="pp-exec-comp">'+(comp?fmt(comp):'\u2014')+'</div></div>';
+            });
+            html += '</div></div>';
+        }
+
+        if (fils.length > 1) {
+            html += '<div class="pp-section"><div class="pp-section-title" onclick="'+tog+'">Filing History <span>&#9660;</span></div>';
+            html += '<div style="display:none"><div class="pp-kv">';
+            fils.slice(0,6).forEach(function(f){
+                html+='<div class="pp-kv-item"><div class="pp-kv-label">'+(f.tax_prd_yr||'')+'</div><div class="pp-kv-val" style="font-size:10px">'+fmt(f.totrevenue)+'</div></div>';
+            });
+            html += '</div></div></div>';
+        }
+
+        html += '<div style="padding:8px 0 4px;text-align:right"><a class="pp-link" href="https://projects.propublica.org/nonprofits/organizations/'+org.ein+'" target="_blank">Full record on ProPublica &#8599;</a></div>';
+        body.innerHTML = html;
+    }
 
     </script>
 </body>

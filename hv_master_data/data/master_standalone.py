@@ -11,7 +11,7 @@ Usage:
     python generate_standalone_map.py
 
 Output:
-    hummingbird_map_standalone.html (~5-15MB depending on data)
+    index.html commit and push to repo root → served by GitHub Pages
 ================================================================================
 """
 
