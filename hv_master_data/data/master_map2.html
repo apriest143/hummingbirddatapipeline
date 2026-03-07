@@ -154,6 +154,28 @@
         /* ── News panel ──────────────────────────────────── */
         #news-panel { position: absolute; top: 0; right: 0; z-index: 1002; width: 370px; height: 100vh; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; transform: translateX(370px); transition: transform 0.3s ease; }
         #news-panel.open { transform: translateX(0); }
+        #land-panel { position: absolute; top: 0; right: 0; z-index: 1001; width: 370px; height: 100vh; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; transform: translateX(370px); transition: transform 0.3s ease; }
+        #land-panel.open { transform: translateX(0); }
+        .land-panel-header { padding: 16px 16px 14px; border-bottom: 1px solid var(--border); background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%); flex-shrink: 0; }
+        .land-panel-header-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+        .land-panel-title { font-size: 13px; font-weight: 700; line-height: 1.3; flex: 1; }
+        .land-panel-sub { font-size: 10px; color: var(--text2); margin-top: 3px; }
+        .land-panel-body { flex: 1; overflow-y: auto; padding: 12px; }
+        .land-panel-body::-webkit-scrollbar { width: 4px; }
+        .land-panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        .land-cat-section { margin-bottom: 14px; }
+        .land-cat-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text2); padding-bottom: 6px; border-bottom: 1px solid var(--border); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+        .land-cat-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .land-feature-item { padding: 6px 8px; background: var(--bg); border-radius: 6px; border-left: 2px solid var(--border); margin-bottom: 4px; font-size: 11px; line-height: 1.4; color: var(--text); }
+        .land-feature-label { font-size: 9px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+        .land-meta { font-size: 9px; color: var(--text2); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+        .land-empty { text-align: center; padding: 48px 20px; color: var(--text2); font-size: 12px; line-height: 1.6; }
+        .land-empty-icon { font-size: 32px; margin-bottom: 12px; }
+        .land-no-data { text-align: center; padding: 32px 20px; color: var(--text2); font-size: 11px; line-height: 1.6; background: var(--bg); border-radius: 8px; margin: 8px 0; }
+        .popup-land-btn { position: absolute; top: 12px; right: 44px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: var(--text2); cursor: pointer; font-size: 13px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; z-index: 10; }
+        .popup-land-btn:hover { background: rgba(16,185,129,0.15); color: #10b981; border-color: rgba(16,185,129,0.4); }
+        .popup-land-btn.has-data { color: #10b981; border-color: rgba(16,185,129,0.35); background: rgba(16,185,129,0.08); }
+        .popup-land-btn.no-data { opacity: 0.35; cursor: default; }
         .news-panel-header { padding: 16px 16px 14px; border-bottom: 1px solid var(--border); background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%); flex-shrink: 0; }
         .news-panel-header-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
         .news-panel-title { font-size: 13px; font-weight: 700; line-height: 1.3; flex: 1; }
@@ -270,6 +292,24 @@
             </div>
         </div>
     </div>
+    <div id="land-panel">
+        <div class="land-panel-header">
+            <div class="land-panel-header-top">
+                <div>
+                    <div class="land-panel-title" id="land-panel-title">Land Environment</div>
+                    <div class="land-panel-sub" id="land-panel-sub">OSM features within 20-mile radius</div>
+                </div>
+                <button class="news-close-btn" onclick="closeLandPanel()" title="Close">&#x2715;</button>
+            </div>
+        </div>
+        <div class="land-panel-body" id="land-panel-body">
+            <div class="land-empty">
+                <div class="land-empty-icon">🌿</div>
+                Click the <strong>🌿</strong> button on any institution popup to view land environment data.
+            </div>
+        </div>
+    </div>
+
     <div id="sidebar">
         <div class="sidebar-header">
             <h1>Hummingbird Intelligence</h1>
@@ -770,6 +810,36 @@
         if(v(r.land_book_value))prop+=gi('Land Value',money(r.land_book_value));
         if(v(r.plant_property_equipment))prop+=gi('PP&E',money(r.plant_property_equipment));
         if(v(r.long_term_debt))prop+=gi('LT Debt',money(r.long_term_debt));
+
+        // Land Intensity Metrics — only show if we have a valid acreage figure
+        var _acres=parseFloat(r.acreage_primary)||parseFloat(r.scraper_acres)||parseFloat(r.osm_acres);
+        if(_acres>0){
+            var _rev=parseFloat(r.revenue_2024),_enr=parseFloat(r.enrollment_2024),_staff=parseFloat(r.fte_staff);
+            var _ppe=parseFloat(r.plant_property_equipment);
+            var hasIntensity=(!isNaN(_rev)&&_rev>0)||(!isNaN(_enr)&&_enr>0)||(!isNaN(_staff)&&_staff>0)||(!isNaN(_ppe)&&_ppe>0);
+            if(hasIntensity){
+                prop+='</div><div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin:10px 0 6px;border-top:1px solid var(--border);padding-top:8px">Land Intensity Metrics</div><div class="pgrid">';
+                if(!isNaN(_rev)&&_rev>0){
+                    var rpa=_rev/_acres;
+                    var rpaFmt=rpa>=1e6?'$'+(rpa/1e6).toFixed(2)+'M':rpa>=1e3?'$'+(rpa/1e3).toFixed(1)+'K':'$'+rpa.toFixed(0);
+                    prop+=gi('Revenue / Acre','<div class="pgrid-val">'+rpaFmt+'</div><div style="font-size:9px;color:var(--text2);margin-top:2px">per acre · FY2024</div>');
+                }
+                if(!isNaN(_enr)&&_enr>0){
+                    var epa=(_enr/_acres).toFixed(2);
+                    prop+=gi('Students / Acre','<div class="pgrid-val">'+parseFloat(epa).toLocaleString(undefined,{maximumFractionDigits:2})+'</div><div style="font-size:9px;color:var(--text2);margin-top:2px">headcount / acre</div>');
+                }
+                if(!isNaN(_staff)&&_staff>0){
+                    var fpa=(_staff/_acres).toFixed(2);
+                    prop+=gi('Faculty / Acre','<div class="pgrid-val">'+parseFloat(fpa).toLocaleString(undefined,{maximumFractionDigits:2})+'</div><div style="font-size:9px;color:var(--text2);margin-top:2px">FTE staff / acre</div>');
+                }
+                if(!isNaN(_ppe)&&_ppe>0){
+                    var pppa=_ppe/_acres;
+                    var pppaFmt=pppa>=1e6?'$'+(pppa/1e6).toFixed(2)+'M':pppa>=1e3?'$'+(pppa/1e3).toFixed(1)+'K':'$'+pppa.toFixed(0);
+                    prop+=gi('PP&E / Acre','<div class="pgrid-val">'+pppaFmt+'</div><div style="font-size:9px;color:var(--text2);margin-top:2px">plant value / acre</div>');
+                }
+            }
+        }
+
         prop+='</div></div></div>';
 
         // Identifiers (collapsed)
@@ -791,6 +861,15 @@
         var nameHtml = closed ? '<h3 class="dimmed">⬡ '+name+'</h3>' : '<h3>'+name+'</h3>';
         var uid = r.unitid ? ('ipeds_' + r.unitid) : ('ein_' + (r.ein || ''));
         var _attr = function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); };
+        var _landData = (typeof OSM_LAND_DATA !== 'undefined') ? (OSM_LAND_DATA[r.institution_name] || null) : null;
+        var landBtnClass = 'popup-land-btn' + (_landData ? ' has-data' : ' no-data');
+        var landBtnClick = _landData ? ' onclick="openLandPanelFromBtn(this)"' : '';
+        var landBtnHtml = '<button class="'+landBtnClass+'"'
+            + ' data-name="' + _attr(r.institution_name||'') + '"'
+            + ' data-city="' + _attr(r.city||'') + '"'
+            + ' data-state="' + _attr(r.state||'') + '"'
+            + landBtnClick
+            + ' title="' + (_landData ? 'View land environment data' : 'No land data scraped yet') + '">🌿</button>';
         var newsBtnHtml = '<button class="popup-news-btn"'
             + ' data-uid="'    + _attr(uid) + '"'
             + ' data-name="'   + _attr(r.institution_name||'') + '"'
@@ -801,7 +880,7 @@
             + ' onclick="openNewsPanelFromBtn(this)"'
             + ' title="Load news &amp; org data">&#128240;</button>';
         return '<div class="popup-wrap">'
-            +'<div class="popup-head '+headClass+'">'+nameHtml+newsBtnHtml
+            +'<div class="popup-head '+headClass+'">'+nameHtml+landBtnHtml+newsBtnHtml
             +'<div class="popup-loc">'+locParts.join('<br>')+'</div>'
             +'<div class="popup-badges">'+badges+'</div></div>'
             +'<div class="popup-content" style="padding:12px;flex:1;overflow-y:auto;min-height:0">'
@@ -1135,6 +1214,94 @@
 
     function closeNewsPanel()   { document.getElementById('news-panel').classList.remove('open'); }
     function forceRefreshNews() { fetchNews(true); }
+
+    // ── Land Environment Panel ─────────────────────────────────────────────────
+
+    var LAND_CAT_META = {
+        water:              { label: 'Water',               color: '#3b9edd', icon: '💧' },
+        winter:             { label: 'Winter / Ski',        color: '#a8d8f0', icon: '⛷'  },
+        outdoor_recreation: { label: 'Outdoor Recreation',  color: '#10b981', icon: '🥾' },
+        protected_land:     { label: 'Protected Land',      color: '#6bcb77', icon: '🌲' },
+        natural_features:   { label: 'Natural Features',    color: '#b8a9f0', icon: '⛰'  },
+        tourism_leisure:    { label: 'Tourism & Leisure',   color: '#ffa502', icon: '🎡' },
+        infrastructure:     { label: 'Infrastructure',      color: '#8b8fa3', icon: '✈'  },
+    };
+    var LAND_CAT_ORDER = ['water','winter','outdoor_recreation','protected_land','natural_features','tourism_leisure','infrastructure'];
+
+    function _escHtml(s) {
+        return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function openLandPanelFromBtn(btn) {
+        openLandPanel(
+            btn.getAttribute('data-name'),
+            btn.getAttribute('data-city'),
+            btn.getAttribute('data-state')
+        );
+    }
+
+    function openLandPanel(name, city, state) {
+        document.getElementById('news-panel').classList.remove('open');
+        document.getElementById('land-panel-title').textContent = name || 'Land Environment';
+        document.getElementById('land-panel-sub').textContent = [city, state].filter(Boolean).join(', ') + ' · OSM 20-mile radius';
+
+        var body = document.getElementById('land-panel-body');
+        var data = (typeof OSM_LAND_DATA !== 'undefined') ? (OSM_LAND_DATA[name] || null) : null;
+
+        if (!data) {
+            body.innerHTML = '<div class="land-no-data"><div style="font-size:28px;margin-bottom:10px">🌿</div>'
+                + '<strong>' + _escHtml(name||'') + '</strong><br><br>'
+                + 'No land environment data scraped yet for this institution.'
+                + '</div>';
+            document.getElementById('land-panel').classList.add('open');
+            return;
+        }
+
+        // Summary strip
+        var html = '<div style="display:flex;gap:8px;margin-bottom:12px">'
+            + '<div style="flex:1;background:var(--bg);border-radius:8px;padding:10px;text-align:center">'
+            +   '<div style="font-family:var(--mono);font-size:18px;font-weight:700;color:#10b981">'+(data.categories?data.categories.length:0)+'</div>'
+            +   '<div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">Categories</div>'
+            + '</div>'
+            + '<div style="flex:1;background:var(--bg);border-radius:8px;padding:10px;text-align:center">'
+            +   '<div style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--text)">'+(data.count||0)+'</div>'
+            +   '<div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">Total Features</div>'
+            + '</div>'
+            + '<div style="flex:1;background:var(--bg);border-radius:8px;padding:10px;text-align:center">'
+            +   '<div style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--text2)">20mi</div>'
+            +   '<div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">Radius</div>'
+            + '</div></div>';
+
+        // Features by category
+        var bycat = data.by_category || {};
+        LAND_CAT_ORDER.forEach(function(cat) {
+            var entries = bycat[cat];
+            if (!entries || !entries.length) return;
+            var meta = LAND_CAT_META[cat] || { label: cat, color: '#8b8fa3', icon: '📍' };
+            html += '<div class="land-cat-section">'
+                + '<div class="land-cat-label">'
+                +   '<span class="land-cat-dot" style="background:'+meta.color+'"></span>'
+                +   meta.icon + ' ' + meta.label
+                +   '<span style="margin-left:auto;font-weight:400">'+entries.length+' type'+(entries.length!==1?'s':'')+'</span>'
+                + '</div>';
+            entries.forEach(function(e) {
+                html += '<div class="land-feature-item">'
+                    + _escHtml(e.display)
+                    + '<div class="land-feature-label">'+_escHtml(e.label)+'</div>'
+                    + '</div>';
+            });
+            html += '</div>';
+        });
+
+        if (data.queried_at) {
+            html += '<div class="land-meta">Queried ' + data.queried_at.replace('T',' ').replace('Z',' UTC') + '</div>';
+        }
+
+        body.innerHTML = html;
+        document.getElementById('land-panel').classList.add('open');
+    }
+
+    function closeLandPanel() { document.getElementById('land-panel').classList.remove('open'); }
 
     function fetchNews(force) {
         if (!_newsCurrentUid || !_newsCurrentName) return;

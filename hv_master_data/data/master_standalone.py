@@ -2,30 +2,34 @@
 ================================================================================
 Hummingbird Map — Standalone Generator
 ================================================================================
-Reads the master CSV, filters to plotted rows (IPEDS + High/Critical 990s),
-trims to only columns the map uses, and embeds the data directly into the HTML
-as a JavaScript array. Output is a single self-contained HTML file that works
-anywhere — no server, no CSV dependency, just double-click and open.
+Reads the master CSV + OSM land results CSV, filters to plotted rows
+(IPEDS + High/Critical 990s), trims to only columns the map uses, and embeds
+both datasets directly into the HTML as JavaScript variables. Output is a single
+self-contained HTML file that works anywhere — no server, no CSV dependency,
+just double-click and open.
 
 Usage:
-    python generate_standalone_map.py
+    python master_standalone.py
 
 Output:
-    index.html commit and push to repo root → served by GitHub Pages
+    index.html  →  commit and push to repo root → served by GitHub Pages
 ================================================================================
 """
 
 import pandas as pd
 import json
 import os
+import re
+import csv
 
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
 
-MASTER_FILE = 'hv_master_data/data/Hummingbird_Master_Combined_v6.csv'
+MASTER_FILE  = 'hv_master_data/data/Hummingbird_Master_Combined_v6.csv'
+OSM_FILE     = 'hv_master_data/acreage_scripts/osm_land_results.csv'   # optional — skipped if missing
 MAP_TEMPLATE = 'hv_master_data/data/master_map2.html'
-OUTPUT_FILE = 'index.html'  # outputs to repo root → served by GitHub Pages
+OUTPUT_FILE  = 'index.html'  # repo root → GitHub Pages
 
 # Columns the map actually references (extracted from JS code)
 KEEP_COLUMNS = [
@@ -62,9 +66,11 @@ KEEP_COLUMNS = [
     'admission_rate', 'yield_rate',
     'tuition_2025', 'student_faculty_ratio',
 
-    # Property
+    # Property & Land
     'plant_property_equipment', 'land_book_value',
-    'acreage_raw', 'verified_acres',
+    'scraper_acres', 'osm_acres', 'acreage_primary', 'acreage_primary_source',
+    'acreage_conflict_flag', 'scraper_confidence', 'osm_confidence',
+    'scraper_source', 'osm_feature_name',
 
     # Flags
     'flag_enrollment_decline', 'flag_operating_losses',
@@ -73,138 +79,291 @@ KEEP_COLUMNS = [
     'flag_990_negative_net_assets', 'flag_990_low_equity', 'flag_990_high_debt',
     'flag_990_revenue_decline_1yr', 'flag_990_revenue_decline_2yr',
     'flag_high_land_potential', 'flag_land_potential',
+    'flag_rural_suburban', 'flag_small_enrollment',
 
     # BMF metadata
     'subsection_code_bmf', 'ruling_date', 'eo_status_bmf',
     'filing_type_primary', 'fte_staff',
 ]
 
+# OSM feature categories — must match osm_features.py
+FEATURES = [
+    ("natural",   "coastline",       "Coastline",              "water"),
+    ("natural",   "water",           "Lake/Pond",              "water"),
+    ("waterway",  "river",           "River",                  "water"),
+    ("natural",   "beach",           "Beach",                  "water"),
+    ("waterway",  "canal",           "Canal",                  "water"),
+    ("waterway",  "stream",          "Stream",                 "water"),
+    ("natural",   "wetland",         "Wetland",                "water"),
+    ("leisure",   "marina",          "Marina",                 "water"),
+    ("natural",   "spring",          "Natural Spring",         "water"),
+    ("natural",   "hot_spring",      "Hot Spring",             "water"),
+    ("leisure",   "ski_resort",      "Ski Resort",             "winter"),
+    ("landuse",   "winter_sports",   "Winter Sports Area",     "winter"),
+    ("piste:type","downhill",        "Downhill Ski Run",       "winter"),
+    ("piste:type","nordic",          "Nordic Ski Trail",       "winter"),
+    ("aerialway", "gondola",         "Gondola",                "winter"),
+    ("aerialway", "chair_lift",      "Chair Lift",             "winter"),
+    ("aerialway", "drag_lift",       "Drag Lift",              "winter"),
+    ("aerialway", "cable_car",       "Cable Car",              "winter"),
+    ("sport",     "ice_skating",     "Ice Skating",            "winter"),
+    ("sport",     "skiing",          "Skiing Facility",        "winter"),
+    ("sport",     "ice_hockey",      "Ice Hockey Rink",        "winter"),
+    ("route",     "hiking",          "Hiking Trail",           "outdoor_recreation"),
+    ("route",     "mtb",             "Mountain Bike Trail",    "outdoor_recreation"),
+    ("route",     "bicycle",         "Cycling Route",          "outdoor_recreation"),
+    ("route",     "horse",           "Equestrian Trail",       "outdoor_recreation"),
+    ("route",     "canoe",           "Canoe Route",            "outdoor_recreation"),
+    ("highway",   "cycleway",        "Dedicated Cycleway",     "outdoor_recreation"),
+    ("highway",   "bridleway",       "Bridleway",              "outdoor_recreation"),
+    ("sport",     "climbing",        "Rock Climbing",          "outdoor_recreation"),
+    ("sport",     "surfing",         "Surfing",                "outdoor_recreation"),
+    ("sport",     "kayaking",        "Kayaking",               "outdoor_recreation"),
+    ("sport",     "rowing",          "Rowing",                 "outdoor_recreation"),
+    ("sport",     "fishing",         "Fishing",                "outdoor_recreation"),
+    ("sport",     "hunting",         "Hunting",                "outdoor_recreation"),
+    ("sport",     "golf",            "Golf",                   "outdoor_recreation"),
+    ("leisure",   "golf_course",     "Golf Course",            "outdoor_recreation"),
+    ("leisure",   "sports_centre",   "Sports Centre",          "outdoor_recreation"),
+    ("leisure",   "horse_riding",    "Horse Riding",           "outdoor_recreation"),
+    ("sport",     "swimming",        "Swimming Facility",      "outdoor_recreation"),
+    ("tourism",   "camp_site",       "Campground",             "outdoor_recreation"),
+    ("tourism",   "wilderness_hut",  "Wilderness Hut",         "outdoor_recreation"),
+    ("boundary",  "national_park",   "National Park",          "protected_land"),
+    ("boundary",  "protected_area",  "Protected Area",         "protected_land"),
+    ("leisure",   "nature_reserve",  "Nature Reserve",         "protected_land"),
+    ("landuse",   "forest",          "Forest",                 "protected_land"),
+    ("boundary",  "forest",          "National Forest",        "protected_land"),
+    ("landuse",   "conservation",    "Conservation Land",      "protected_land"),
+    ("natural",   "wood",            "Woodland",               "natural_features"),
+    ("natural",   "peak",            "Mountain Peak",          "natural_features"),
+    ("natural",   "volcano",         "Volcano",                "natural_features"),
+    ("natural",   "cliff",           "Cliff",                  "natural_features"),
+    ("natural",   "cave_entrance",   "Cave",                   "natural_features"),
+    ("natural",   "glacier",         "Glacier",                "natural_features"),
+    ("natural",   "scrub",           "Scrubland",              "natural_features"),
+    ("natural",   "heath",           "Heathland",              "natural_features"),
+    ("tourism",   "resort",          "Resort",                 "tourism_leisure"),
+    ("tourism",   "theme_park",      "Theme Park",             "tourism_leisure"),
+    ("tourism",   "zoo",             "Zoo",                    "tourism_leisure"),
+    ("tourism",   "aquarium",        "Aquarium",               "tourism_leisure"),
+    ("tourism",   "museum",          "Museum",                 "tourism_leisure"),
+    ("tourism",   "attraction",      "Tourist Attraction",     "tourism_leisure"),
+    ("tourism",   "viewpoint",       "Scenic Viewpoint",       "tourism_leisure"),
+    ("historic",  "monument",        "Historic Monument",      "tourism_leisure"),
+    ("leisure",   "park",            "Park",                   "tourism_leisure"),
+    ("leisure",   "garden",          "Botanical Garden",       "tourism_leisure"),
+    ("amenity",   "casino",          "Casino",                 "tourism_leisure"),
+    ("aeroway",   "aerodrome",       "Airport",                "infrastructure"),
+    ("railway",   "station",         "Train Station",          "infrastructure"),
+    ("amenity",   "ferry_terminal",  "Ferry Terminal",         "infrastructure"),
+]
+
+LABEL_TO_CAT  = {f[2]: f[3] for f in FEATURES}
+CAT_ORDER     = ['water','winter','outdoor_recreation','protected_land',
+                 'natural_features','tourism_leisure','infrastructure']
+
+
+# =============================================================================
+# OSM LAND DATA BUILDER
+# =============================================================================
+
+def parse_osm_feature_string(feat_str):
+    """
+    Parse the pipe-delimited feature string from osm_land_results.csv into a
+    by_category dict: { cat: [ {label, display}, ... ], ... }
+
+    Format of each pipe segment:  "display text [Label]"
+    """
+    by_category = {}
+    if not feat_str or feat_str.strip() in ('', 'ERROR'):
+        return by_category
+
+    for part in feat_str.split(' | '):
+        part = part.strip()
+        if not part:
+            continue
+        label   = ''
+        display = part
+        if part.endswith(']') and '[' in part:
+            bracket = part.rfind('[')
+            label   = part[bracket+1:-1].strip()
+            display = part[:bracket].strip()
+
+        cat = LABEL_TO_CAT.get(label, 'other')
+        if cat == 'other':
+            continue   # skip unrecognised labels (old-format data)
+        if cat not in by_category:
+            by_category[cat] = []
+        by_category[cat].append({'label': label, 'display': display})
+
+    return by_category
+
+
+def build_osm_lookup(osm_path):
+    """
+    Read osm_land_results.csv and return a dict keyed by institution_name.
+    Only rows with a valid timestamp (i.e. not ERROR, not incomplete) are included.
+    """
+    if not os.path.exists(osm_path):
+        print(f"  OSM file not found: {osm_path} — skipping land data")
+        return {}
+
+    lookup = {}
+    with open(osm_path, newline='', encoding='utf-8') as f:
+        for row in csv.DictReader(f):
+            name      = row.get('institution_name', '').strip()
+            queried   = row.get('osm_env_queried_at', '').strip()
+            feat_str  = row.get('osm_env_features', '').strip()
+            if not name or not queried or feat_str == 'ERROR':
+                continue
+
+            cats_raw = [c.strip() for c in row.get('osm_env_categories', '').split('|') if c.strip()]
+            by_cat   = parse_osm_feature_string(feat_str)
+
+            lookup[name] = {
+                'categories':  cats_raw,
+                'count':       int(row.get('osm_env_count', '0') or '0'),
+                'radius_miles': row.get('osm_env_radius_miles', '20'),
+                'queried_at':  queried,
+                'by_category': by_cat,
+            }
+
+    return lookup
+
+
+# =============================================================================
+# MAIN
+# =============================================================================
 
 def main():
-    print("=" * 70)
-    print("HUMMINGBIRD MAP — STANDALONE GENERATOR")
-    print("=" * 70)
+    print('=' * 70)
+    print('HUMMINGBIRD MAP — STANDALONE GENERATOR')
+    print('=' * 70)
 
-    # --- Load and filter data ---
-    print("\nLoading master...")
+    # ── Load and filter master data ──────────────────────────────────────────
+    print(f'\nLoading master: {MASTER_FILE}')
     master = pd.read_csv(MASTER_FILE, low_memory=False)
-    print(f"  Total rows: {len(master):,}, columns: {len(master.columns)}")
+    print(f'  Total rows: {len(master):,}, columns: {len(master.columns)}')
 
-    # Normalize: unify distress_category across IPEDS and 990 sources
+    # Normalise distress category/score across IPEDS and 990 sources
     mask_empty_cat = master['distress_category'].isna() | (master['distress_category'] == '')
     if 'distress_category_990' in master.columns:
         master.loc[mask_empty_cat, 'distress_category'] = master.loc[mask_empty_cat, 'distress_category_990']
-    
-    # Map 990 category names to IPEDS convention
+
     cat_map = {'High Risk': 'High', 'Severe Distress': 'Critical', 'Low Risk': 'Low', 'Moderate Risk': 'Moderate'}
-    master['distress_category'] = master['distress_category'].map(lambda x: cat_map.get(x, x) if pd.notna(x) else x)
+    master['distress_category'] = master['distress_category'].map(
+        lambda x: cat_map.get(x, x) if pd.notna(x) else x)
 
     if 'distress_score_990' in master.columns:
         mask_empty_score = master['distress_score'].isna()
         master.loc[mask_empty_score, 'distress_score'] = master.loc[mask_empty_score, 'distress_score_990']
+
+    if 'data_completeness_pct' not in master.columns:
+        master['data_completeness_pct'] = None
     if 'data_completeness_990' in master.columns:
-        mask_empty_comp = master['data_completeness_pct'].isna() if 'data_completeness_pct' in master.columns else pd.Series(True, index=master.index)
-        if 'data_completeness_pct' not in master.columns:
-            master['data_completeness_pct'] = None
+        mask_empty_comp = master['data_completeness_pct'].isna()
         master.loc[mask_empty_comp, 'data_completeness_pct'] = master.loc[mask_empty_comp, 'data_completeness_990']
 
-    # Debug: check 990 status
-    df990 = master[master['data_source'] == 'Hummingbird_990']
-    print(f"  990 rows total: {len(df990):,}")
-    print(f"  990 with distress_category: {df990['distress_category'].notna().sum():,}")
-    print(f"  990 High/Critical: {df990['distress_category'].isin(['High','Critical']).sum():,}")
-    print(f"  990 with lat/long: {(df990['latitude'].notna() & df990['longitude'].notna()).sum():,}")
-
-    # Filter to plotted rows
-    master['latitude'] = pd.to_numeric(master['latitude'], errors='coerce')
+    # Filter to plotted rows (has coords, IPEDS or 990)
+    master['latitude']  = pd.to_numeric(master['latitude'],  errors='coerce')
     master['longitude'] = pd.to_numeric(master['longitude'], errors='coerce')
     has_coords = master['latitude'].notna() & master['longitude'].notna()
+    is_ipeds   = master['data_source'] == 'IPEDS'
+    is_990     = master['data_source'] == 'Hummingbird_990'
+    plotted    = master[has_coords & (is_ipeds | is_990)].copy()
 
-    is_ipeds = master['data_source'] == 'IPEDS'
-    is_990 = master['data_source'] == 'Hummingbird_990'
+    print(f'  Plotted rows: {len(plotted):,}')
+    print(f'    IPEDS: {(plotted["data_source"]=="IPEDS").sum():,}')
+    print(f'    990:   {(plotted["data_source"]=="Hummingbird_990").sum():,}')
 
-    plotted = master[has_coords & (is_ipeds | is_990)].copy()
-    print(f"  Plotted rows: {len(plotted):,}")
-    print(f"    IPEDS: {(plotted['data_source']=='IPEDS').sum():,}")
-    print(f"    990: {(plotted['data_source']=='Hummingbird_990').sum():,}")
-
-    # --- Trim to only needed columns ---
+    # Trim to needed columns
     available = [c for c in KEEP_COLUMNS if c in plotted.columns]
-    missing = [c for c in KEEP_COLUMNS if c not in plotted.columns]
-    plotted = plotted[available].copy()
+    missing   = [c for c in KEEP_COLUMNS if c not in plotted.columns]
+    plotted   = plotted[available].copy()
 
     if missing:
-        print(f"\n  Note: {len(missing)} columns not in master (skipped):")
+        print(f'\n  Note: {len(missing)} columns not found in master (skipped):')
         for m in missing[:10]:
-            print(f"    - {m}")
+            print(f'    - {m}')
         if len(missing) > 10:
-            print(f"    ... and {len(missing)-10} more")
+            print(f'    ... and {len(missing)-10} more')
 
-    # --- Clean data for JSON embedding ---
-    # Replace NaN with empty string for cleaner JSON
-    plotted = plotted.fillna('')
-
-    # Convert to list of dicts
-    records = plotted.to_dict(orient='records')
-
-    # Compact JSON — no pretty-print, minimize size
+    plotted   = plotted.fillna('')
+    records   = plotted.to_dict(orient='records')
     data_json = json.dumps(records, separators=(',', ':'))
-    size_mb = len(data_json) / (1024 * 1024)
-    print(f"\n  Data JSON size: {size_mb:.1f} MB")
-    print(f"  Records: {len(records):,}, fields per record: {len(available)}")
+    size_mb   = len(data_json) / (1024 * 1024)
+    print(f'\n  Data JSON: {size_mb:.1f} MB  ({len(records):,} records, {len(available)} fields)')
 
-    # --- Read map template ---
-    print(f"\nReading map template: {MAP_TEMPLATE}")
+    # ── Load OSM land data ───────────────────────────────────────────────────
+    print(f'\nLoading OSM land data: {OSM_FILE}')
+    osm_lookup = build_osm_lookup(OSM_FILE)
+    osm_json   = json.dumps(osm_lookup, separators=(',', ':'), ensure_ascii=False)
+    osm_mb     = len(osm_json) / (1024 * 1024)
+    print(f'  {len(osm_lookup):,} institutions with land data  ({osm_mb:.1f} MB)')
+
+    # ── Read map template ────────────────────────────────────────────────────
+    print(f'\nReading template: {MAP_TEMPLATE}')
     with open(MAP_TEMPLATE, 'r', encoding='utf-8') as f:
         html = f.read()
 
-    # --- Replace Papa.parse CSV loading with inline data ---
-    # Use regex to find and replace the loadCSV function regardless of exact content
-    import re
-    
+    # ── Inject master data (replace loadCSV) ─────────────────────────────────
     pattern = r'function loadCSV\(\)\s*\{.*?\n    \}'
-    
     new_load = """function loadCSV() {
         allData = _embeddedData;
-        plotData = allData; // Already filtered during generation
+        plotData = allData;
 
-        // Update header
-        var nIPEDS = plotData.filter(function(r){return r.data_source==='IPEDS'}).length;
-        var n990 = plotData.filter(function(r){return r.data_source==='Hummingbird_990'}).length;
+        var nIPEDS  = plotData.filter(function(r){return r.data_source==='IPEDS'}).length;
+        var n990    = plotData.filter(function(r){return r.data_source==='Hummingbird_990'}).length;
+        var nClosed = plotData.filter(function(r){return isLikelyClosed(r)}).length;
         document.getElementById('headerSubtitle').textContent =
-            plotData.length.toLocaleString()+' plotted · '+nIPEDS.toLocaleString()+' IPEDS + '+n990.toLocaleString()+' 990s';
+            plotData.length.toLocaleString()+' plotted · '+nIPEDS.toLocaleString()+' IPEDS · '+
+            n990.toLocaleString()+' 990s · '+nClosed+' likely closed';
 
         showMarkers(plotData);
     }"""
 
     match = re.search(pattern, html, re.DOTALL)
     if match:
-        # Insert embedded data variable before the function
-        data_declaration = "    // --- EMBEDDED DATA (standalone mode) ---\n    var _embeddedData = __DATA_PLACEHOLDER__;\n\n    "
+        data_declaration = (
+            '    // ── Embedded master data (standalone) ──\n'
+            '    var _embeddedData = __MASTER_DATA__;\n\n'
+            '    // ── Embedded OSM land data (standalone) ──\n'
+            '    var OSM_LAND_DATA = __OSM_DATA__;\n\n    '
+        )
         html = html[:match.start()] + data_declaration + new_load + html[match.end():]
-        print("  ✓ Replaced loadCSV with embedded data loader")
+        print('  ✓ Replaced loadCSV with embedded data loader')
     else:
-        print("  ERROR: Could not locate loadCSV function in template!")
+        print('  ERROR: Could not find loadCSV function in template — aborting')
         return
 
-    # Inject the actual data
-    html = html.replace('__DATA_PLACEHOLDER__', data_json)
+    # Inject the actual data values
+    html = html.replace('__MASTER_DATA__', data_json)
+    html = html.replace('__OSM_DATA__',    osm_json)
 
-    # Remove PapaParse script tag (no longer needed)
-    html = html.replace(
-        '<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>',
-        '<!-- PapaParse removed (standalone mode) -->'
+    # Remove PapaParse (no longer needed in standalone mode)
+    html = re.sub(
+        r'<script src="[^"]*papaparse[^"]*"></script>',
+        '<!-- PapaParse removed (standalone mode) -->',
+        html
     )
 
-    # --- Write output ---
-    final_size = len(html) / (1024 * 1024)
+    # Remove osm_land_data.js reference if present in template
+    # (data is now baked in directly)
+    html = re.sub(
+        r'<script src="osm_land_data\.js"[^>]*></script>',
+        '<!-- osm_land_data.js removed (standalone mode — data baked in) -->',
+        html
+    )
+
+    # ── Write output ─────────────────────────────────────────────────────────
+    final_mb = len(html) / (1024 * 1024)
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
         f.write(html)
 
-    print(f"\n  Output: {OUTPUT_FILE}")
-    print(f"  File size: {final_size:.1f} MB")
-    print(f"\n  ✓ Self-contained — just open in a browser!")
-    print("=" * 70)
+    print(f'\n  Output: {OUTPUT_FILE}  ({final_mb:.1f} MB)')
+    print(f'  ✓ Self-contained — commit and push to serve on GitHub Pages')
+    print('=' * 70)
 
 
 if __name__ == '__main__':
