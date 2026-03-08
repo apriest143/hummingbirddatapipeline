@@ -168,12 +168,17 @@ CAT_ORDER     = ['water','winter','outdoor_recreation','protected_land',
 # OSM LAND DATA BUILDER
 # =============================================================================
 
+MAX_NAMED_DISPLAY = 5   # max named features shown per label in the baked output
+
 def parse_osm_feature_string(feat_str):
     """
     Parse the pipe-delimited feature string from osm_land_results.csv into a
     by_category dict: { cat: [ {label, display}, ... ], ... }
 
     Format of each pipe segment:  "display text [Label]"
+
+    Trimming: each label is capped at MAX_NAMED_DISPLAY named items for the
+    baked output — keeps the JS small. The full data remains in the CSV.
     """
     by_category = {}
     if not feat_str or feat_str.strip() in ('', 'ERROR'):
@@ -195,7 +200,35 @@ def parse_osm_feature_string(feat_str):
             continue   # skip unrecognised labels (old-format data)
         if cat not in by_category:
             by_category[cat] = []
-        by_category[cat].append({'label': label, 'display': display})
+
+        # Trim named list to MAX_NAMED_DISPLAY, preserving unnamed count
+        # Display format: "Name1, Name2 + N unnamed Labels" or "Name1, Name2"
+        # We split on " + N unnamed" to separate names from unnamed count
+        import re as _re
+        unnamed_count = 0
+        named_str = display
+
+        unnamed_m = _re.search(r' \+ (\d+) unnamed .+$', display)
+        if unnamed_m:
+            unnamed_count = int(unnamed_m.group(1))
+            named_str = display[:unnamed_m.start()]
+
+        names = [n.strip() for n in named_str.split(',') if n.strip()]
+
+        # Cap at MAX_NAMED_DISPLAY, roll overflow back into unnamed count
+        overflow = max(0, len(names) - MAX_NAMED_DISPLAY)
+        unnamed_count += overflow
+        names = names[:MAX_NAMED_DISPLAY]
+
+        # Rebuild trimmed display string
+        if names and unnamed_count > 0:
+            trimmed_display = ', '.join(names) + f' +{unnamed_count} more'
+        elif names:
+            trimmed_display = ', '.join(names)
+        else:
+            trimmed_display = display  # all unnamed, keep as-is
+
+        by_category[cat].append({'label': label, 'display': trimmed_display})
 
     return by_category
 
