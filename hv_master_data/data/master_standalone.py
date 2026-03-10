@@ -242,6 +242,9 @@ def build_osm_lookup(osm_path):
         print(f"  OSM file not found: {osm_path} — skipping land data")
         return {}
 
+    # Some feature strings exceed Python's default CSV field limit (131072 bytes)
+    csv.field_size_limit(10 * 1024 * 1024)  # 10MB — safely above any real row
+
     lookup = {}
     with open(osm_path, newline='', encoding='utf-8') as f:
         for row in csv.DictReader(f):
