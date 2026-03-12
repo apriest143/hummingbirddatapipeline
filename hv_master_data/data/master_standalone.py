@@ -399,8 +399,29 @@ def main():
 
     print(f'\n  Output: {OUTPUT_FILE}  ({final_mb:.1f} MB)')
     print(f'  ✓ Self-contained — commit and push to serve on GitHub Pages')
+
+    # ── Run cluster pipeline ──────────────────────────────────────────────────
+    clusters_script = os.path.join(os.path.dirname(__file__), 'clusters.py')
+    if not os.path.exists(clusters_script):
+        # Try repo root
+        clusters_script = 'hv_master_data/data/clusters.py'
+    if os.path.exists(clusters_script):
+        print('\n' + '=' * 70)
+        print('  Running cluster pipeline...')
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, clusters_script],
+            capture_output=False
+        )
+        if result.returncode != 0:
+            print('  ⚠ Cluster pipeline failed — skipping (clusters.html not updated)')
+    else:
+        print(f'\n  ℹ clusters.py not found — skipping cluster generation')
+        print(f'    Place clusters.py at: {clusters_script}')
+
     print('=' * 70)
 
 
 if __name__ == '__main__':
+    import sys
     main()
