@@ -266,10 +266,42 @@
         .pp-link:hover { text-decoration: underline; }
         .popup-content { padding: 12px; flex: 1; overflow-y: auto; min-height: 0; }
         .popup-content .spark-chart-wrap { overflow: visible; }
+        /* ── Land panel ─────────────────────────────────── */
+        #land-panel { position: absolute; top: 0; right: 0; z-index: 1001; width: 360px; height: 100vh; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; transform: translateX(360px); transition: transform 0.3s ease; }
+        #land-panel.open { transform: translateX(0); }
+        .land-panel-head { padding: 16px; border-bottom: 1px solid var(--border); background: linear-gradient(135deg, #0a1628 0%, #0d2137 100%); flex-shrink: 0; position: relative; }
+        .land-panel-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 2px; padding-right: 32px; }
+        .land-panel-sub { font-size: 10px; color: var(--text2); }
+        .land-close-btn { position: absolute; top: 12px; right: 12px; background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--text2); cursor: pointer; font-size: 14px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; }
+        .land-close-btn:hover { background: var(--bg); color: var(--text); }
+        .land-summary-strip { display: flex; gap: 6px; padding: 10px 14px; background: var(--bg); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+        .land-sum-chip { flex: 1; padding: 6px 8px; background: var(--surface2); border-radius: 6px; text-align: center; }
+        .land-sum-val { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--text); }
+        .land-sum-label { font-size: 8px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+        .land-body { flex: 1; overflow-y: auto; padding: 12px; }
+        .land-body::-webkit-scrollbar { width: 4px; }
+        .land-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        .land-cat-section { margin-bottom: 14px; }
+        .land-cat-header { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; padding: 4px 8px; border-radius: 4px; margin-bottom: 6px; display: inline-block; }
+        .land-feature-item { font-size: 11px; color: var(--text); padding: 3px 0 3px 10px; border-left: 2px solid var(--border); margin-bottom: 2px; line-height: 1.4; }
+        .land-timestamp { font-size: 9px; color: var(--text2); padding: 10px 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
+        .land-empty { text-align: center; padding: 40px 20px; color: var(--text2); font-size: 11px; }
     </style>
 </head>
 <body>
     <div id="map"></div>
+
+    <!-- Land environment panel -->
+    <div id="land-panel">
+        <div class="land-panel-head">
+            <div class="land-panel-title" id="land-panel-title">Land Environment</div>
+            <div class="land-panel-sub" id="land-panel-sub"></div>
+            <button class="land-close-btn" onclick="closeLandPanel()">✕</button>
+        </div>
+        <div class="land-summary-strip" id="land-summary-strip"></div>
+        <div class="land-body" id="land-body"></div>
+        <div class="land-timestamp" id="land-timestamp"></div>
+    </div>
     <!-- ── News Panel ──────────────────────────────────────────────────── -->
     <div id="news-panel">
         <div class="news-panel-header">
@@ -1247,6 +1279,76 @@
         document.querySelector('input[name="osmMatch"][value="any"]').checked=true;
         showMarkers(plotData);
     }
+    // ── Land panel ─────────────────────────────────────────────────────────────
+    var LAND_CAT_COLORS = {
+        water:              { bg: 'rgba(59,158,221,0.15)',  color: '#3b9edd' },
+        winter:             { bg: 'rgba(168,216,240,0.15)', color: '#a8d8f0' },
+        outdoor_recreation: { bg: 'rgba(16,185,129,0.15)',  color: '#10b981' },
+        protected_land:     { bg: 'rgba(107,203,119,0.15)', color: '#6bcb77' },
+        natural_features:   { bg: 'rgba(184,169,240,0.15)', color: '#b8a9f0' },
+        tourism_leisure:    { bg: 'rgba(255,165,2,0.15)',   color: '#ffa502' },
+        infrastructure:     { bg: 'rgba(139,143,163,0.15)', color: '#8b8fa3' }
+    };
+    var LAND_CAT_LABELS = {
+        water: '💧 Water', winter: '⛷ Winter', outdoor_recreation: '🥾 Outdoor Recreation',
+        protected_land: '🌲 Protected Land', natural_features: '⛰ Natural Features',
+        tourism_leisure: '🎡 Tourism & Leisure', infrastructure: '✈ Infrastructure'
+    };
+
+    function openLandPanelFromBtn(btn) {
+        var name = btn.getAttribute('data-name');
+        var city = btn.getAttribute('data-city');
+        var state = btn.getAttribute('data-state');
+        if (typeof OSM_LAND_DATA === 'undefined' || !OSM_LAND_DATA[name]) return;
+        openLandPanel(name, city, state, OSM_LAND_DATA[name]);
+    }
+
+    function openLandPanel(name, city, state, data) {
+        // Close news panel if open
+        var np = document.getElementById('news-panel');
+        if (np) np.classList.remove('open');
+
+        document.getElementById('land-panel-title').textContent = name;
+        document.getElementById('land-panel-sub').textContent = [city, state].filter(Boolean).join(', ');
+
+        // Summary strip
+        var cats = data.categories || [];
+        var count = data.total_count || 0;
+        var radius = data.radius_miles || 20;
+        document.getElementById('land-summary-strip').innerHTML =
+            '<div class="land-sum-chip"><div class="land-sum-val">'+cats.length+'</div><div class="land-sum-label">Categories</div></div>'
+           +'<div class="land-sum-chip"><div class="land-sum-val">'+count+'</div><div class="land-sum-label">Features</div></div>'
+           +'<div class="land-sum-chip"><div class="land-sum-val">'+radius+'mi</div><div class="land-sum-label">Radius</div></div>';
+
+        // Feature sections
+        var html = '';
+        var bycat = data.by_category || {};
+        var catOrder = ['water','winter','outdoor_recreation','protected_land','natural_features','tourism_leisure','infrastructure'];
+        catOrder.forEach(function(cat) {
+            if (!bycat[cat] || !bycat[cat].length) return;
+            var style = LAND_CAT_COLORS[cat] || { bg: 'rgba(255,255,255,0.05)', color: '#aaa' };
+            var label = LAND_CAT_LABELS[cat] || cat;
+            html += '<div class="land-cat-section">'
+                + '<div class="land-cat-header" style="background:'+style.bg+';color:'+style.color+'">'+label+'</div>';
+            bycat[cat].forEach(function(feat) {
+                var text = (typeof feat === 'object') ? (feat.display || feat.label || JSON.stringify(feat)) : feat;
+                html += '<div class="land-feature-item" style="border-left-color:'+style.color+'">'+text+'</div>';
+            });
+            html += '</div>';
+        });
+        document.getElementById('land-body').innerHTML = html || '<div class="land-empty">No feature detail available.</div>';
+
+        // Timestamp
+        var ts = data.queried_at || '';
+        document.getElementById('land-timestamp').textContent = ts ? 'Scraped: ' + ts : '';
+
+        document.getElementById('land-panel').classList.add('open');
+    }
+
+    function closeLandPanel() {
+        document.getElementById('land-panel').classList.remove('open');
+    }
+
     function toggleSidebar(){
         var sb=document.getElementById('sidebar');
         sb.classList.toggle('collapsed');
@@ -1487,7 +1589,7 @@
 
         var q   = encodeURIComponent(buildNewsQuery(_newsCurrentName,_newsCurrentCity,_newsCurrentState,_newsCurrentSource));
         var rss = 'https://news.google.com/rss/search?q=' + q + '&hl=en-US&gl=US&ceid=US:en';
-        var url = 'https://corsproxy.io/?' + encodeURIComponent(rss);
+        var url = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(rss);
 
         fetch(url)
             .then(function(r){ if(!r.ok) throw new Error('Proxy '+r.status); return r.text(); })
@@ -1592,7 +1694,7 @@
 
         // EINs stored as floats (e.g. '10357799.0') — parse via float, then zero-pad to 9 digits
         var cleanEin = String(parseInt(parseFloat(String(ein)), 10)).padStart(9, '0');
-        var url = 'https://corsproxy.io/?' +
+        var url = 'https://api.allorigins.win/raw?url=' +
             encodeURIComponent('https://projects.propublica.org/nonprofits/api/v2/organizations/' + cleanEin + '.json');
 
         fetch(url)
