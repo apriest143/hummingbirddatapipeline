@@ -559,13 +559,13 @@ function doExport() {
   var cols = src === 'ipeds'
     ? ['name','state','city','type','distress','category','enrollment','revenue','acres','closure_risk','risk_tier','urbanization']
     : ['name','state','city','type','distress','category','revenue','acres'];
-  var csvStr = cols.join(',') + '
-' + rows.map(function(r) {
-    return cols.map(function(col) {
-      return '"' + String(r[col] != null ? r[col] : '').replace(/"/g,'""') + '"';
-    }).join(',');
-  }).join('
-');
+  var csvLines = [cols.join(',')];
+  for (var ei = 0; ei < rows.length; ei++) {
+    csvLines.push(cols.map(function(col) {
+      return '"' + String(rows[ei][col] != null ? rows[ei][col] : '').replace(/"/g, '""') + '"';
+    }).join(','));
+  }
+  var csvStr = csvLines.join(String.fromCharCode(10));
   var blob = new Blob([csvStr], {type:'text/csv'});
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
