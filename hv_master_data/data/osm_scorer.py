@@ -80,6 +80,44 @@ def _get_tier(label):
 NAMED_MULTIPLIER   = 1.0
 UNNAMED_MULTIPLIER = 0.35
 
+# ---------------------------------------------------------------------------
+# Urban context multipliers
+# Applied to the final composite score based on urbanization classification.
+# Rationale: OSM features within 20 miles of a dense urban institution are
+# rarely "accessible" to that institution — they are regional geography, not
+# campus-adjacent land. Rural institutions truly sit inside their environment.
+# ---------------------------------------------------------------------------
+URBAN_CONTEXT_MULT = {
+    'City: Large':    0.30,   # dense urban — features are regional noise
+    'City: Midsize':  0.40,
+    'City: Small':    0.50,
+    'Suburb: Large':  0.65,
+    'Suburb: Midsize':0.72,
+    'Suburb: Small':  0.78,
+    'Town: Fringe':   0.85,
+    'Town: Distant':  0.88,
+    'Town: Remote':   0.92,
+    'Rural: Fringe':  0.95,
+    'Rural: Distant': 0.97,
+    'Rural: Remote':  1.00,
+}
+
+def get_urban_mult(urbanization):
+    """Return the context multiplier for a given urbanization string."""
+    if not urbanization:
+        return 0.80   # unknown — be conservative
+    urb = urbanization.strip()
+    # Exact match first
+    if urb in URBAN_CONTEXT_MULT:
+        return URBAN_CONTEXT_MULT[urb]
+    # Prefix match fallback
+    prefix = urb.split(':')[0].strip()
+    if prefix == 'City':    return 0.40
+    if prefix == 'Suburb':  return 0.70
+    if prefix == 'Town':    return 0.88
+    if prefix == 'Rural':   return 0.97
+    return 0.80
+
 def _count_named_unnamed(display_str):
     if not display_str: return 0, 0
     s = display_str.strip()
@@ -100,10 +138,11 @@ CATEGORY_WEIGHTS = {
 }
 MAX_CATEGORY_SCORE = sum(CATEGORY_WEIGHTS.values())
 
-def score_osm_environment(by_category, feature_count=0, radius_miles=20):
+def score_osm_environment(by_category, feature_count=0, radius_miles=20, urbanization=None):
     if not by_category:
         return {'score': None, 'feature_score': None, 'category_score': None,
                 'density_bonus': None, 'radius_bonus': None,
+                'context_mult': None, 'urbanization': urbanization,
                 'breakdown': [], 'top_features': [], 'has_osm_data': False}
 
     breakdown = []
@@ -141,12 +180,18 @@ def score_osm_environment(by_category, feature_count=0, radius_miles=20):
     except: rm = 20.0
     radius_score = max(0.0, min(100.0, (20.0 - rm) / 20.0 * 100.0))
 
-    composite = round(min(100.0, max(0.0,
+    # Raw composite before urban context adjustment
+    raw_composite = min(100.0, max(0.0,
         feature_score  * 0.55 +
         category_score * 0.30 +
         density_score  * 0.10 +
         radius_score   * 0.05
-    )), 1)
+    ))
+
+    # Apply urban context multiplier — reduces score for dense urban institutions
+    # where OSM features within the search radius aren't truly accessible land
+    context_mult = get_urban_mult(urbanization) if urbanization else 0.80
+    composite = round(raw_composite * context_mult, 1)
 
     top_features = [b['label'] for b in sorted(breakdown, key=lambda x: (x['tier'], -x['pts']))[:6]]
 
@@ -154,6 +199,8 @@ def score_osm_environment(by_category, feature_count=0, radius_miles=20):
             'category_score': round(category_score, 1),
             'density_bonus': round(density_score, 1),
             'radius_bonus': round(radius_score, 1),
+            'context_mult': round(context_mult, 2),
+            'urbanization': urbanization,
             'breakdown': breakdown, 'top_features': top_features,
             'has_osm_data': True}
 
@@ -173,18 +220,18 @@ def score_color(score):
     if score >= 35:    return '#ff6b35'
     return '#8b8fa3'
 
-def score_from_osm_row(osm_row, parse_fn):
+def score_from_osm_row(osm_row, parse_fn, urbanization=None):
+    """
+    Convenience wrapper: given a raw OSM CSV row dict and the
+    parse_osm_feature_string function, return a full score dict.
+    Pass urbanization string from the master CSV for context adjustment.
+    """
     feat_str = osm_row.get('osm_env_features', '').strip()
     by_cat   = parse_fn(feat_str)
     count    = osm_row.get('osm_env_count', 0)
     radius   = osm_row.get('osm_env_radius_miles', 20)
-    return score_osm_environment(by_cat, feature_count=count, radius_miles=radius)
-
-
-# ---------------------------------------------------------------------------
-# Self-test
-# ---------------------------------------------------------------------------
-if __name__ == '__main__':
+    return score_osm_environment(by_cat, feature_count=count,
+                                 radius_miles=radius, urbanization=urbanization)
     test_by_cat = {
         'winter': [
             {'label': 'Ski Resort',          'display': 'Stowe Mountain Resort'},

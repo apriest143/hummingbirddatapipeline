@@ -1370,7 +1370,9 @@
         return '<div class="env-score-badge">' + gaugeHtml
             + '<div class="env-score-info">'
             + '<div class="env-score-label" style="color:'+color+'">'+label+' Environment</div>'
-            + '<div class="env-score-sub">HV Environment Score — named natural features, outdoor access, and protected land proximity.</div>'
+            + '<div class="env-score-sub">HV Environment Score — named natural features and outdoor access'
+            + (envScore.context_mult && envScore.context_mult < 1.0 ? ' <span style="color:#ffa502">×' + envScore.context_mult + ' urban context</span>' : '')
+            + '.</div>'
             + featsHtml + compsHtml + '</div></div>';
     }
 
