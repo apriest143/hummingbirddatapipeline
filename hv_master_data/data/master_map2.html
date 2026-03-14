@@ -272,6 +272,21 @@
         #land-panel { position: absolute; top: 0; right: 0; z-index: 1001; width: 360px; height: 100vh; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; transform: translateX(360px); transition: transform 0.3s ease; }
         #land-panel.open { transform: translateX(0); }
         .land-panel-head { padding: 16px; border-bottom: 1px solid var(--border); background: linear-gradient(135deg, #0a1628 0%, #0d2137 100%); flex-shrink: 0; position: relative; }
+        .env-score-badge { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); }
+        .env-score-gauge { position: relative; width: 48px; height: 48px; flex-shrink: 0; }
+        .env-score-gauge svg { width: 48px; height: 48px; transform: rotate(-90deg); }
+        .env-score-gauge .gauge-bg  { fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 4; }
+        .env-score-gauge .gauge-fill { fill: none; stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 0.6s ease; }
+        .env-score-num { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-family: var(--mono); font-size: 11px; font-weight: 600; }
+        .env-score-info { flex: 1; }
+        .env-score-label { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+        .env-score-sub { font-size: 10px; color: var(--text2); line-height: 1.4; }
+        .env-score-breakdown { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 3px; }
+        .env-score-feat { font-family: var(--mono); font-size: 9px; padding: 1px 6px; border-radius: 3px; background: rgba(255,255,255,0.06); color: var(--text2); border: 1px solid var(--border); }
+        .env-score-components { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 8px; }
+        .env-comp { padding: 5px 8px; border-radius: 4px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); }
+        .env-comp-label { font-size: 9px; color: var(--text2); margin-bottom: 1px; }
+        .env-comp-val { font-family: var(--mono); font-size: 11px; font-weight: 500; }
         .land-panel-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 2px; padding-right: 32px; }
         .land-panel-sub { font-size: 10px; color: var(--text2); }
         .land-close-btn { position: absolute; top: 12px; right: 12px; background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--text2); cursor: pointer; font-size: 14px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; }
@@ -1306,26 +1321,84 @@
         openLandPanel(name, city, state, OSM_LAND_DATA[name]);
     }
 
+    function envScoreColor(score) {
+        if (score === null || score === undefined) return '#3d4f6e';
+        if (score >= 85) return '#00b894';
+        if (score >= 70) return '#10b981';
+        if (score >= 55) return '#ffa502';
+        if (score >= 35) return '#ff6b35';
+        return '#8b8fa3';
+    }
+    function envScoreLabel(score) {
+        if (score === null || score === undefined) return 'Not Scraped';
+        if (score >= 85) return 'Exceptional';
+        if (score >= 70) return 'Strong';
+        if (score >= 55) return 'Moderate';
+        if (score >= 35) return 'Limited';
+        return 'Minimal';
+    }
+    function buildEnvScoreBadge(envScore) {
+        if (!envScore || envScore.score === null || envScore.score === undefined) {
+            return '<div class="env-score-badge"><div style="font-size:11px;color:var(--text2)">Environment score not yet available — OSM scrape pending.</div></div>';
+        }
+        var score = envScore.score;
+        var color = envScoreColor(score);
+        var label = envScoreLabel(score);
+        var r = 20; var circ = 2 * Math.PI * r;
+        var filled = (score / 100) * circ;
+        var topFeats = (envScore.top_features || []).slice(0, 5);
+        var gaugeHtml = '<div class="env-score-gauge">'
+            + '<svg viewBox="0 0 48 48"><circle class="gauge-bg" cx="24" cy="24" r="'+r+'"/>'
+            + '<circle class="gauge-fill" cx="24" cy="24" r="'+r+'" stroke="'+color+'" '
+            + 'stroke-dasharray="'+circ.toFixed(1)+'" stroke-dashoffset="'+(circ-filled).toFixed(1)+'"/>'
+            + '</svg><div class="env-score-num" style="color:'+color+'">'+score.toFixed(0)+'</div></div>';
+        var featsHtml = topFeats.length > 0
+            ? '<div class="env-score-breakdown">'
+              + topFeats.map(function(f){ return '<span class="env-score-feat">'+f+'</span>'; }).join('')
+              + '</div>'
+            : '';
+        var compsHtml = '<div class="env-score-components">'
+            + '<div class="env-comp"><div class="env-comp-label">Feature Quality</div>'
+            + '<div class="env-comp-val" style="color:'+envScoreColor(envScore.feature_score)+'">'+envScore.feature_score+'</div></div>'
+            + '<div class="env-comp"><div class="env-comp-label">Category Mix</div>'
+            + '<div class="env-comp-val" style="color:'+envScoreColor(envScore.category_score)+'">'+envScore.category_score+'</div></div>'
+            + '<div class="env-comp"><div class="env-comp-label">Feature Density</div>'
+            + '<div class="env-comp-val" style="color:'+envScoreColor(envScore.density_bonus)+'">'+envScore.density_bonus+'</div></div>'
+            + '<div class="env-comp"><div class="env-comp-label">Proximity</div>'
+            + '<div class="env-comp-val" style="color:'+envScoreColor(envScore.radius_bonus)+'">'+envScore.radius_bonus+'</div></div>'
+            + '</div>';
+        return '<div class="env-score-badge">' + gaugeHtml
+            + '<div class="env-score-info">'
+            + '<div class="env-score-label" style="color:'+color+'">'+label+' Environment</div>'
+            + '<div class="env-score-sub">HV Environment Score — named natural features, outdoor access, and protected land proximity.</div>'
+            + featsHtml + compsHtml + '</div></div>';
+    }
+
     function openLandPanel(name, city, state, data) {
-        // Close news panel if open
         var np = document.getElementById('news-panel');
         if (np) np.classList.remove('open');
-
         document.getElementById('land-panel-title').textContent = name;
         document.getElementById('land-panel-sub').textContent = [city, state].filter(Boolean).join(', ');
-
+        // Environment score badge
+        var envScore = (data && data.env_score) ? data.env_score : null;
+        var badgeEl = document.getElementById('land-env-score-badge');
+        if (!badgeEl) {
+            badgeEl = document.createElement('div');
+            badgeEl.id = 'land-env-score-badge';
+            document.querySelector('.land-panel-head').appendChild(badgeEl);
+        }
+        badgeEl.innerHTML = buildEnvScoreBadge(envScore);
         // Summary strip
-        var cats = data.categories || [];
-        var count = data.total_count || 0;
-        var radius = data.radius_miles || 20;
+        var cats = (data && data.categories) ? data.categories : [];
+        var count = (data && data.count) ? data.count : 0;
+        var radius = (data && data.radius_miles) ? data.radius_miles : 20;
         document.getElementById('land-summary-strip').innerHTML =
             '<div class="land-sum-chip"><div class="land-sum-val">'+cats.length+'</div><div class="land-sum-label">Categories</div></div>'
            +'<div class="land-sum-chip"><div class="land-sum-val">'+count+'</div><div class="land-sum-label">Features</div></div>'
            +'<div class="land-sum-chip"><div class="land-sum-val">'+radius+'mi</div><div class="land-sum-label">Radius</div></div>';
-
         // Feature sections
         var html = '';
-        var bycat = data.by_category || {};
+        var bycat = (data && data.by_category) ? data.by_category : {};
         var catOrder = ['water','winter','outdoor_recreation','protected_land','natural_features','tourism_leisure','infrastructure'];
         catOrder.forEach(function(cat) {
             if (!bycat[cat] || !bycat[cat].length) return;
@@ -1340,11 +1413,8 @@
             html += '</div>';
         });
         document.getElementById('land-body').innerHTML = html || '<div class="land-empty">No feature detail available.</div>';
-
-        // Timestamp
-        var ts = data.queried_at || '';
+        var ts = (data && data.queried_at) ? data.queried_at : '';
         document.getElementById('land-timestamp').textContent = ts ? 'Scraped: ' + ts : '';
-
         document.getElementById('land-panel').classList.add('open');
     }
 
