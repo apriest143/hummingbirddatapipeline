@@ -1,62 +1,33 @@
 """
-clusters.py — Hummingbird Ventures Opportunity Cluster Engine v2
-================================================================
-Reads Hummingbird_Master_Combined_v6.csv (+ optional osm_land_results.csv),
-fits K-Means models and generates clusters.html.
+clusters.py v3 — Hummingbird Ventures Opportunity Cluster Engine
+=================================================================
+Rebuilt around three axes meaningful to HV's acquisition thesis:
+  1. URGENCY    — how close is this to transacting?
+  2. LAND       — how much underleveraged physical asset is here?
+  3. HV FIT     — does the environment match outdoor/wellness programming?
 
-METHODOLOGY OVERVIEW
---------------------
-IPEDS institutions are split by ownership type before clustering:
-  - Public institutions       → K=3
-  - Private Non-Profit        → K=3
-  - Private For-Profit        → K=3
-  Total: up to 9 named IPEDS clusters
+Institution type is used for LABELING only, not as a clustering feature.
+All IPEDS institutions are clustered together (K=6).
+990 nonprofits are clustered together (K=5).
 
-990 nonprofits are clustered together (K=5) since they share a
-common reporting structure regardless of sub-type.
-
-Features used:
-  IPEDS: distress subdomain scores, financial ratios, enrollment
-         metrics, closure risk, acreage, binary flags
-  990:   distress subdomain scores, financial ratios, PPE,
-         acreage, binary flags, institution type one-hot
-  OSM:   binary one-hot for each environment category
-         (water, winter, outdoor_recreation, etc.) where scraped
-
-Run from repo root:
-    python hv_master_data/data/clusters.py
-
-Or called by master_standalone.py.
+OSM environment score (0-100) from osm_scorer.py is used as a direct
+feature, replacing the coarse one-hot category flags.
 """
 
-import os
-import sys
-import csv
-import json
-import math
-import argparse
-import warnings
+import os, sys, csv, json, math, argparse, warnings, datetime
 from collections import Counter, defaultdict
-
 warnings.filterwarnings('ignore')
 
-# ---------------------------------------------------------------------------
-# Paths
-# ---------------------------------------------------------------------------
 DEFAULT_MASTER   = 'hv_master_data/data/Hummingbird_Master_Combined_v6.csv'
 DEFAULT_OSM      = 'hv_master_data/acreage_scripts/osm_land_results.csv'
 DEFAULT_OUT_HTML = 'clusters.html'
 DEFAULT_OUT_CSV  = 'hv_master_data/data/Hummingbird_Master_Clustered.csv'
 
-# K values per segment
-K_PUBLIC  = 3
-K_PNP     = 3
-K_PFP     = 3
-K_HB990   = 5
+K_IPEDS = 6
+K_HB990 = 5
 
-# OSM category pipe-separated values we one-hot encode
-OSM_CATS = ['water', 'winter', 'outdoor_recreation', 'protected_land',
-            'natural_features', 'tourism_leisure', 'infrastructure']
+OSM_CATS = ['water','winter','outdoor_recreation','protected_land',
+            'natural_features','tourism_leisure','infrastructure']
 
 STATE_REGION = {
     'Maine':'Northeast','New Hampshire':'Northeast','Vermont':'Northeast',
@@ -81,14 +52,14 @@ STATE_REGION = {
 # ---------------------------------------------------------------------------
 def fv(row, col, default=None):
     v = row.get(col, '')
-    if v in ('', 'nan', 'NaN', 'None', None): return default
+    if v in ('','nan','NaN','None',None): return default
     try:
         r = float(v)
         return default if (math.isnan(r) or math.isinf(r)) else r
     except: return default
 
 def flag(row, col):
-    return str(row.get(col, '')).strip().lower() in ('1', 'true', 'yes', '1.0')
+    return str(row.get(col,'')).strip().lower() in ('1','true','yes','1.0')
 
 def safe_log(x):
     if x is None or x <= 0: return None
@@ -96,140 +67,230 @@ def safe_log(x):
 
 def impute_median(values):
     valid = [v for v in values if v is not None]
-    if not valid: return [0.0] * len(values)
+    if not valid: return [0.0]*len(values)
     valid.sort()
-    med = valid[len(valid) // 2]
+    med = valid[len(valid)//2]
     return [v if v is not None else med for v in values]
 
 def sanitize_for_json(obj):
     if isinstance(obj, float):
         return None if (math.isnan(obj) or math.isinf(obj)) else obj
-    if isinstance(obj, dict):
-        return {k: sanitize_for_json(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [sanitize_for_json(v) for v in obj]
+    if isinstance(obj, dict): return {k: sanitize_for_json(v) for k,v in obj.items()}
+    if isinstance(obj, list): return [sanitize_for_json(v) for v in obj]
     return obj
 
 def med_of(rows, col):
-    vals = [fv(r, col) for r in rows if fv(r, col) is not None]
+    vals = [fv(r,col) for r in rows if fv(r,col) is not None]
     if not vals: return 0
-    vals.sort(); return vals[len(vals) // 2]
+    vals.sort(); return vals[len(vals)//2]
 
 def pct_of(rows, col):
-    return round(sum(1 for r in rows if flag(r, col)) / max(len(rows), 1) * 100)
+    return round(sum(1 for r in rows if flag(r,col)) / max(len(rows),1) * 100)
 
 def top_of(rows, col):
-    c = Counter(r.get(col, '') for r in rows if r.get(col, ''))
+    c = Counter(r.get(col,'') for r in rows if r.get(col,''))
     return c.most_common(1)[0][0] if c else ''
 
-def osm_cats_for(row):
-    raw = row.get('_osm_categories', [])
-    if isinstance(raw, str):
-        return [c.strip().lower() for c in raw.split(',') if c.strip()]
-    return [c.lower() for c in raw]
+# ---------------------------------------------------------------------------
+# Load scorer
+# ---------------------------------------------------------------------------
+def load_scorer():
+    paths = [
+        os.path.join(os.path.dirname(__file__), 'osm_scorer.py'),
+        'hv_master_data/data/osm_scorer.py',
+        'osm_scorer.py',
+    ]
+    for p in paths:
+        if os.path.exists(p):
+            import importlib.util
+            spec = importlib.util.spec_from_file_location('osm_scorer', p)
+            mod  = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+    return None
 
 # ---------------------------------------------------------------------------
-# Feature extraction — shared IPEDS base
+# Parse OSM features (mirrors master_standalone logic)
 # ---------------------------------------------------------------------------
-def ipeds_feature_names():
-    return [
-        # Distress subdomain scores (0-100, higher = worse)
+FEATURES = [
+    ("natural","coastline","Coastline","water"),
+    ("natural","water","Lake/Pond","water"),
+    ("waterway","river","River","water"),
+    ("natural","beach","Beach","water"),
+    ("waterway","canal","Canal","water"),
+    ("waterway","stream","Stream","water"),
+    ("natural","wetland","Wetland","water"),
+    ("leisure","marina","Marina","water"),
+    ("natural","spring","Natural Spring","water"),
+    ("natural","hot_spring","Hot Spring","water"),
+    ("leisure","ski_resort","Ski Resort","winter"),
+    ("landuse","winter_sports","Winter Sports Area","winter"),
+    ("piste:type","downhill","Downhill Ski Run","winter"),
+    ("piste:type","nordic","Nordic Ski Trail","winter"),
+    ("aerialway","gondola","Gondola","winter"),
+    ("aerialway","chair_lift","Chair Lift","winter"),
+    ("aerialway","drag_lift","Drag Lift","winter"),
+    ("aerialway","cable_car","Cable Car","winter"),
+    ("sport","ice_skating","Ice Skating","winter"),
+    ("sport","skiing","Skiing Facility","winter"),
+    ("sport","ice_hockey","Ice Hockey Rink","winter"),
+    ("route","hiking","Hiking Trail","outdoor_recreation"),
+    ("route","mtb","Mountain Bike Trail","outdoor_recreation"),
+    ("route","bicycle","Cycling Route","outdoor_recreation"),
+    ("route","horse","Equestrian Trail","outdoor_recreation"),
+    ("route","canoe","Canoe Route","outdoor_recreation"),
+    ("highway","cycleway","Dedicated Cycleway","outdoor_recreation"),
+    ("highway","bridleway","Bridleway","outdoor_recreation"),
+    ("sport","climbing","Rock Climbing","outdoor_recreation"),
+    ("sport","surfing","Surfing","outdoor_recreation"),
+    ("sport","kayaking","Kayaking","outdoor_recreation"),
+    ("sport","rowing","Rowing","outdoor_recreation"),
+    ("sport","fishing","Fishing","outdoor_recreation"),
+    ("sport","hunting","Hunting","outdoor_recreation"),
+    ("sport","golf","Golf","outdoor_recreation"),
+    ("leisure","golf_course","Golf Course","outdoor_recreation"),
+    ("leisure","sports_centre","Sports Centre","outdoor_recreation"),
+    ("leisure","horse_riding","Horse Riding","outdoor_recreation"),
+    ("sport","swimming","Swimming Facility","outdoor_recreation"),
+    ("tourism","camp_site","Campground","outdoor_recreation"),
+    ("tourism","wilderness_hut","Wilderness Hut","outdoor_recreation"),
+    ("boundary","national_park","National Park","protected_land"),
+    ("boundary","protected_area","Protected Area","protected_land"),
+    ("leisure","nature_reserve","Nature Reserve","protected_land"),
+    ("landuse","forest","Forest","protected_land"),
+    ("boundary","forest","National Forest","protected_land"),
+    ("landuse","conservation","Conservation Land","protected_land"),
+    ("natural","wood","Woodland","natural_features"),
+    ("natural","peak","Mountain Peak","natural_features"),
+    ("natural","volcano","Volcano","natural_features"),
+    ("natural","cliff","Cliff","natural_features"),
+    ("natural","cave_entrance","Cave","natural_features"),
+    ("natural","glacier","Glacier","natural_features"),
+    ("natural","scrub","Scrubland","natural_features"),
+    ("natural","heath","Heathland","natural_features"),
+    ("tourism","resort","Resort","tourism_leisure"),
+    ("tourism","theme_park","Theme Park","tourism_leisure"),
+    ("tourism","zoo","Zoo","tourism_leisure"),
+    ("tourism","aquarium","Aquarium","tourism_leisure"),
+    ("tourism","museum","Museum","tourism_leisure"),
+    ("tourism","attraction","Tourist Attraction","tourism_leisure"),
+    ("tourism","viewpoint","Scenic Viewpoint","tourism_leisure"),
+    ("historic","monument","Historic Monument","tourism_leisure"),
+    ("leisure","park","Park","tourism_leisure"),
+    ("leisure","garden","Botanical Garden","tourism_leisure"),
+    ("amenity","casino","Casino","tourism_leisure"),
+    ("aeroway","aerodrome","Airport","infrastructure"),
+    ("railway","station","Train Station","infrastructure"),
+    ("amenity","ferry_terminal","Ferry Terminal","infrastructure"),
+]
+LABEL_TO_CAT = {f[2]: f[3] for f in FEATURES}
+
+import re as _re
+def parse_osm_feature_string(feat_str):
+    by_category = {}
+    if not feat_str or feat_str.strip() in ('','ERROR'): return by_category
+    for part in feat_str.split(' | '):
+        part = part.strip()
+        if not part: continue
+        label = ''; display = part
+        if part.endswith(']') and '[' in part:
+            bracket = part.rfind('[')
+            label   = part[bracket+1:-1].strip()
+            display = part[:bracket].strip()
+        cat = LABEL_TO_CAT.get(label, 'other')
+        if cat == 'other': continue
+        if cat not in by_category: by_category[cat] = []
+        unnamed_count = 0; named_str = display
+        m = _re.search(r' \+ (\d+) unnamed .+$', display)
+        if m:
+            unnamed_count = int(m.group(1))
+            named_str = display[:m.start()]
+        names = [n.strip() for n in named_str.split(',') if n.strip()]
+        trimmed = ', '.join(names[:5])
+        if unnamed_count > 0: trimmed += f' +{unnamed_count} more'
+        elif not names: trimmed = display
+        by_category[cat].append({'label': label, 'display': trimmed})
+    return by_category
+
+# ---------------------------------------------------------------------------
+# IPEDS feature extraction — urgency + land + HV fit axes
+# ---------------------------------------------------------------------------
+def extract_ipeds_features(rows, osm_scores):
+    feat_names = [
+        # ── URGENCY AXIS ──────────────────────────────────────────────
         'distress_score',
-        'solvency_score', 'liquidity_score', 'operating_score',
-        'enrollment_score', 'academic_score', 'trend_score',
-        # Closure risk (ML model output, 0-1)
         'closure_risk_score',
-        # Financial ratios
-        'operating_margin', 'tuition_dependency',
-        # Enrollment
-        'log_enrollment', 'enrollment_yoy_pct', 'enrollment_2yr_pct',
-        'retention_rate', 'graduation_rate',
-        # Physical
-        'log_acreage', 'log_revenue',
-        # Binary flags
-        'flag_enrollment_decline', 'flag_small_enrollment',
-        'flag_high_tuition_dependency', 'flag_low_retention',
-        'flag_operating_losses', 'flag_negative_net_worth',
-        'flag_land_potential', 'flag_high_land_potential', 'flag_rural_suburban',
-        # Urbanization one-hot
+        'enrollment_score_ipeds',
+        'solvency_score_ipeds',
+        'operating_score_ipeds',
+        'enrollment_2yr_pct',        # trajectory
+        'revenue_2yr_pct',           # trajectory
+        'flag_enrollment_decline',
+        'flag_operating_losses',
+        'flag_negative_net_worth',
+        'flag_high_tuition_dependency',
+        # ── LAND AXIS ────────────────────────────────────────────────
+        'log_acreage',
+        'flag_rural_suburban',
+        'flag_land_potential',
+        'flag_high_land_potential',
         'urban_city', 'urban_suburb', 'urban_town', 'urban_rural',
-        # Region one-hot
-        'region_ne', 'region_se', 'region_mw', 'region_sw', 'region_w',
-        # OSM environment one-hot
-    ] + [f'osm_{c}' for c in OSM_CATS]
+        # ── HV FIT AXIS ──────────────────────────────────────────────
+        'osm_environment_score',     # 0-100 composite from osm_scorer
+        # ── SIZE CONTROLS ────────────────────────────────────────────
+        'log_enrollment',
+        'log_revenue',
+        # ── REGION ───────────────────────────────────────────────────
+        'region_ne','region_se','region_mw','region_sw','region_w',
+    ]
 
-
-def extract_ipeds_row(r):
-    """Extract feature vector for a single IPEDS row."""
-    ug = (r.get('urbanization', '') or '').split(':')[0].strip()
-    reg = STATE_REGION.get(r.get('state', ''), 'Unknown')
-    acres = fv(r, 'acreage_primary') or fv(r, 'scraper_acres') or fv(r, 'osm_acres')
-    cats = osm_cats_for(r)
-
-    vec = [
-        fv(r, 'distress_score'),
-        fv(r, 'solvency_score_ipeds'),
-        fv(r, 'liquidity_score_ipeds'),
-        fv(r, 'operating_score_ipeds'),
-        fv(r, 'enrollment_score_ipeds'),
-        fv(r, 'academic_score_ipeds'),
-        fv(r, 'trend_score_ipeds'),
-        fv(r, 'closure_risk_score'),
-        fv(r, 'operating_margin'),
-        fv(r, 'tuition_dependency'),
-        safe_log(fv(r, 'enrollment_2024')),
-        fv(r, 'enrollment_yoy_pct'),
-        fv(r, 'enrollment_2yr_pct'),
-        fv(r, 'retention_rate'),
-        fv(r, 'graduation_rate'),
-        safe_log(acres),
-        safe_log(fv(r, 'revenue_2024')),
-        1.0 if flag(r, 'flag_enrollment_decline') else 0.0,
-        1.0 if flag(r, 'flag_small_enrollment') else 0.0,
-        1.0 if flag(r, 'flag_high_tuition_dependency') else 0.0,
-        1.0 if flag(r, 'flag_low_retention') else 0.0,
-        1.0 if flag(r, 'flag_operating_losses') else 0.0,
-        1.0 if flag(r, 'flag_negative_net_worth') else 0.0,
-        1.0 if flag(r, 'flag_land_potential') else 0.0,
-        1.0 if flag(r, 'flag_high_land_potential') else 0.0,
-        1.0 if flag(r, 'flag_rural_suburban') else 0.0,
-        1.0 if ug == 'City' else 0.0,
-        1.0 if ug == 'Suburb' else 0.0,
-        1.0 if ug == 'Town' else 0.0,
-        1.0 if ug == 'Rural' else 0.0,
-        1.0 if reg == 'Northeast' else 0.0,
-        1.0 if reg == 'Southeast' else 0.0,
-        1.0 if reg == 'Midwest' else 0.0,
-        1.0 if reg == 'Southwest' else 0.0,
-        1.0 if reg == 'West' else 0.0,
-    ] + [1.0 if cat in cats else 0.0 for cat in OSM_CATS]
-    return vec
-
-
-def build_ipeds_segment(rows, type_filter):
-    """Extract feature matrix for one institution-type segment."""
-    feat_names = ipeds_feature_names()
     raw = defaultdict(list)
     valid_indices = []
 
     for i, r in enumerate(rows):
         if r.get('data_source') != 'IPEDS': continue
-        it = r.get('institution_type', '')
-        if type_filter == 'public' and 'Public' not in it: continue
-        if type_filter == 'pnp' and 'Non-Profit' not in it: continue
-        if type_filter == 'pfp' and 'For-Profit' not in it: continue
+        ug  = (r.get('urbanization','') or '').split(':')[0].strip()
+        reg = STATE_REGION.get(r.get('state',''), 'Unknown')
+        acres = fv(r,'acreage_primary') or fv(r,'scraper_acres') or fv(r,'osm_acres')
+        osm_s = osm_scores.get(r.get('institution_name',''), {}).get('score')
 
-        vec = extract_ipeds_row(r)
+        vals = [
+            fv(r,'distress_score'),
+            fv(r,'closure_risk_score'),
+            fv(r,'enrollment_score_ipeds'),
+            fv(r,'solvency_score_ipeds'),
+            fv(r,'operating_score_ipeds'),
+            fv(r,'enrollment_2yr_pct'),
+            fv(r,'revenue_2yr_pct'),
+            1.0 if flag(r,'flag_enrollment_decline') else 0.0,
+            1.0 if flag(r,'flag_operating_losses') else 0.0,
+            1.0 if flag(r,'flag_negative_net_worth') else 0.0,
+            1.0 if flag(r,'flag_high_tuition_dependency') else 0.0,
+            safe_log(acres),
+            1.0 if flag(r,'flag_rural_suburban') else 0.0,
+            1.0 if flag(r,'flag_land_potential') else 0.0,
+            1.0 if flag(r,'flag_high_land_potential') else 0.0,
+            1.0 if ug=='City' else 0.0,
+            1.0 if ug=='Suburb' else 0.0,
+            1.0 if ug=='Town' else 0.0,
+            1.0 if ug=='Rural' else 0.0,
+            osm_s,
+            safe_log(fv(r,'enrollment_2024')),
+            safe_log(fv(r,'revenue_2024')),
+            1.0 if reg=='Northeast' else 0.0,
+            1.0 if reg=='Southeast' else 0.0,
+            1.0 if reg=='Midwest' else 0.0,
+            1.0 if reg=='Southwest' else 0.0,
+            1.0 if reg=='West' else 0.0,
+        ]
         for j, name in enumerate(feat_names):
-            raw[name].append(vec[j])
+            raw[name].append(vals[j])
         valid_indices.append(i)
 
-    # Impute continuous columns
-    continuous = ['distress_score','solvency_score','liquidity_score','operating_score',
-                  'enrollment_score','academic_score','trend_score','closure_risk_score',
-                  'operating_margin','tuition_dependency','log_enrollment',
-                  'enrollment_yoy_pct','enrollment_2yr_pct','retention_rate',
-                  'graduation_rate','log_acreage','log_revenue']
+    continuous = ['distress_score','closure_risk_score','enrollment_score_ipeds',
+                  'solvency_score_ipeds','operating_score_ipeds','enrollment_2yr_pct',
+                  'revenue_2yr_pct','log_acreage','osm_environment_score',
+                  'log_enrollment','log_revenue']
     for col in continuous:
         raw[col] = impute_median(raw[col])
 
@@ -237,90 +298,97 @@ def build_ipeds_segment(rows, type_filter):
     matrix = [[raw[feat][i] for feat in feat_names] for i in range(n)]
     return matrix, feat_names, valid_indices
 
-
 # ---------------------------------------------------------------------------
-# 990 feature extraction
+# 990 feature extraction — urgency + physical assets + HV fit
 # ---------------------------------------------------------------------------
-def extract_990_features(rows):
-    feature_names = [
+def extract_990_features(rows, osm_scores):
+    feat_names = [
+        # ── URGENCY ───────────────────────────────────────────────────
         'distress_score',
-        'solvency_score', 'liquidity_score', 'operating_score',
-        'trend_score', 'red_flag_score',
-        'operating_margin', 'equity_ratio',
-        'log_revenue', 'log_assets', 'log_ppe', 'log_acreage',
-        'flag_operating_loss', 'flag_negative_net_assets',
-        'flag_high_debt', 'flag_consecutive_losses',
-        'flag_revenue_decline_1yr', 'flag_low_equity',
-        # Type one-hot
-        'type_religious', 'type_housing', 'type_recreation',
-        'type_educational', 'type_youth', 'type_environmental',
-        'type_human_services', 'type_animal', 'type_agriculture', 'type_other',
-        # Region
-        'region_ne', 'region_se', 'region_mw', 'region_sw', 'region_w',
-        # OSM
-    ] + [f'osm_{c}' for c in OSM_CATS]
+        'solvency_score_990',
+        'operating_score_990',
+        'trend_score_990',
+        'red_flag_score_990',
+        'operating_margin',
+        'equity_ratio',
+        'flag_990_operating_loss',
+        'flag_990_negative_net_assets',
+        'flag_990_high_debt',
+        'flag_990_consecutive_losses',
+        'flag_990_revenue_decline_1yr',
+        # ── PHYSICAL ASSETS ──────────────────────────────────────────
+        'log_revenue',
+        'log_assets',
+        'log_ppe',
+        'log_acreage',
+        # ── HV FIT ───────────────────────────────────────────────────
+        'osm_environment_score',
+        # ── TYPE one-hots ────────────────────────────────────────────
+        'type_religious','type_housing','type_recreation',
+        'type_educational','type_youth','type_environmental',
+        'type_human_services','type_animal','type_agriculture','type_other',
+        # ── REGION ───────────────────────────────────────────────────
+        'region_ne','region_se','region_mw','region_sw','region_w',
+    ]
 
     raw = defaultdict(list)
     valid_indices = []
 
     for i, r in enumerate(rows):
         if r.get('data_source') != 'Hummingbird_990': continue
-
-        it = r.get('institution_type', '')
-        acres = fv(r, 'scraper_acres') or fv(r, 'osm_acres')
-        cats = osm_cats_for(r)
-        reg = STATE_REGION.get(r.get('state', ''), 'Unknown')
+        it   = r.get('institution_type','')
+        reg  = STATE_REGION.get(r.get('state',''), 'Unknown')
+        acres = fv(r,'scraper_acres') or fv(r,'osm_acres')
+        osm_s = osm_scores.get(r.get('institution_name',''), {}).get('score')
 
         vals = [
-            fv(r, 'distress_score'),
-            fv(r, 'solvency_score_990'),
-            fv(r, 'liquidity_score_990'),
-            fv(r, 'operating_score_990'),
-            fv(r, 'trend_score_990'),
-            fv(r, 'red_flag_score_990'),
-            fv(r, 'operating_margin'),
-            fv(r, 'equity_ratio'),
-            safe_log(fv(r, 'revenue_2024')),
-            safe_log(fv(r, 'assets_2024')),
-            safe_log(fv(r, 'plant_property_equipment')),
+            fv(r,'distress_score'),
+            fv(r,'solvency_score_990'),
+            fv(r,'operating_score_990'),
+            fv(r,'trend_score_990'),
+            fv(r,'red_flag_score_990'),
+            fv(r,'operating_margin'),
+            fv(r,'equity_ratio'),
+            1.0 if flag(r,'flag_990_operating_loss') else 0.0,
+            1.0 if flag(r,'flag_990_negative_net_assets') else 0.0,
+            1.0 if flag(r,'flag_990_high_debt') else 0.0,
+            1.0 if flag(r,'flag_990_consecutive_losses') else 0.0,
+            1.0 if flag(r,'flag_990_revenue_decline_1yr') else 0.0,
+            safe_log(fv(r,'revenue_2024')),
+            safe_log(fv(r,'assets_2024')),
+            safe_log(fv(r,'plant_property_equipment')),
             safe_log(acres),
-            1.0 if flag(r, 'flag_990_operating_loss') else 0.0,
-            1.0 if flag(r, 'flag_990_negative_net_assets') else 0.0,
-            1.0 if flag(r, 'flag_990_high_debt') else 0.0,
-            1.0 if flag(r, 'flag_990_consecutive_losses') else 0.0,
-            1.0 if flag(r, 'flag_990_revenue_decline_1yr') else 0.0,
-            1.0 if flag(r, 'flag_990_low_equity') else 0.0,
-            1.0 if it == 'Religious Institution' else 0.0,
-            1.0 if it == 'Housing/Residential' else 0.0,
-            1.0 if it == 'Recreation/Camp' else 0.0,
-            1.0 if it == 'Educational Institution' else 0.0,
-            1.0 if it == 'Youth Development' else 0.0,
-            1.0 if it == 'Environmental/Conservation' else 0.0,
-            1.0 if it == 'Human Services' else 0.0,
-            1.0 if it == 'Animal/Wildlife' else 0.0,
-            1.0 if it == 'Agriculture/Farm' else 0.0,
-            1.0 if it == 'Other Nonprofit' else 0.0,
-            1.0 if reg == 'Northeast' else 0.0,
-            1.0 if reg == 'Southeast' else 0.0,
-            1.0 if reg == 'Midwest' else 0.0,
-            1.0 if reg == 'Southwest' else 0.0,
-            1.0 if reg == 'West' else 0.0,
-        ] + [1.0 if cat in cats else 0.0 for cat in OSM_CATS]
-
-        for j, name in enumerate(feature_names):
+            osm_s,
+            1.0 if it=='Religious Institution' else 0.0,
+            1.0 if it=='Housing/Residential' else 0.0,
+            1.0 if it=='Recreation/Camp' else 0.0,
+            1.0 if it=='Educational Institution' else 0.0,
+            1.0 if it=='Youth Development' else 0.0,
+            1.0 if it=='Environmental/Conservation' else 0.0,
+            1.0 if it=='Human Services' else 0.0,
+            1.0 if it=='Animal/Wildlife' else 0.0,
+            1.0 if it=='Agriculture/Farm' else 0.0,
+            1.0 if it=='Other Nonprofit' else 0.0,
+            1.0 if reg=='Northeast' else 0.0,
+            1.0 if reg=='Southeast' else 0.0,
+            1.0 if reg=='Midwest' else 0.0,
+            1.0 if reg=='Southwest' else 0.0,
+            1.0 if reg=='West' else 0.0,
+        ]
+        for j, name in enumerate(feat_names):
             raw[name].append(vals[j])
         valid_indices.append(i)
 
-    continuous = ['distress_score','solvency_score','liquidity_score','operating_score',
-                  'trend_score','red_flag_score','operating_margin','equity_ratio',
-                  'log_revenue','log_assets','log_ppe','log_acreage']
+    continuous = ['distress_score','solvency_score_990','operating_score_990',
+                  'trend_score_990','red_flag_score_990','operating_margin',
+                  'equity_ratio','log_revenue','log_assets','log_ppe',
+                  'log_acreage','osm_environment_score']
     for col in continuous:
         raw[col] = impute_median(raw[col])
 
     n = len(valid_indices)
-    matrix = [[raw[feat][i] for feat in feature_names] for i in range(n)]
-    return matrix, feature_names, valid_indices
-
+    matrix = [[raw[feat][i] for feat in feat_names] for i in range(n)]
+    return matrix, feat_names, valid_indices
 
 # ---------------------------------------------------------------------------
 # K-Means
@@ -333,275 +401,306 @@ def run_kmeans(matrix, k, seed=42):
     labels = km.fit_predict(X)
     return labels.tolist(), km.inertia_
 
+# ---------------------------------------------------------------------------
+# Cluster characterization helpers
+# ---------------------------------------------------------------------------
+def axis_scores(rows, osm_scores, source='IPEDS'):
+    """Compute urgency / land / fit axis scores for a cluster."""
+    # URGENCY: composite of distress signals
+    ds  = med_of(rows, 'distress_score')
+    cr  = med_of(rows, 'closure_risk_score') or 0
+    pct_op_loss   = pct_of(rows, 'flag_operating_losses') if source=='IPEDS' else pct_of(rows, 'flag_990_operating_loss')
+    pct_neg       = pct_of(rows, 'flag_negative_net_worth') if source=='IPEDS' else pct_of(rows, 'flag_990_negative_net_assets')
+    pct_enr_dec   = pct_of(rows, 'flag_enrollment_decline') if source=='IPEDS' else 0
+    urgency = round(min(100, ds * 0.4 + cr * 3000 * 0.3 + pct_op_loss * 0.2 + pct_neg * 0.1), 1)
+
+    # LAND: acreage + rurality
+    acres = med_of(rows,'acreage_primary') or med_of(rows,'scraper_acres') or med_of(rows,'osm_acres') or 0
+    pct_rural = pct_of(rows, 'flag_rural_suburban') if source=='IPEDS' else 0
+    pct_land  = pct_of(rows, 'flag_land_potential') if source=='IPEDS' else 0
+    log_acres = math.log1p(acres) / math.log1p(500) * 100 if acres > 0 else 0
+    land = round(min(100, log_acres * 0.6 + pct_rural * 0.25 + pct_land * 0.15), 1)
+
+    # HV FIT: osm environment score median
+    osm_vals = [osm_scores.get(r.get('institution_name',''),{}).get('score')
+                for r in rows if osm_scores.get(r.get('institution_name',''),{}).get('score') is not None]
+    fit = round(sum(osm_vals)/len(osm_vals), 1) if osm_vals else None
+
+    return urgency, land, fit
 
 # ---------------------------------------------------------------------------
-# Cluster naming — IPEDS by segment
+# IPEDS cluster naming — thesis-first
 # ---------------------------------------------------------------------------
-def name_public_cluster(rows, cid):
+def name_ipeds_cluster(rows, cid, osm_scores):
     ds   = med_of(rows, 'distress_score')
-    enr  = med_of(rows, 'enrollment_2024')
-    rev  = med_of(rows, 'revenue_2024')
-    acres = med_of(rows, 'acreage_primary') or med_of(rows, 'scraper_acres') or 0
     cr   = med_of(rows, 'closure_risk_score') or 0
-    pct_enr_dec = pct_of(rows, 'flag_enrollment_decline')
-    pct_op_loss = pct_of(rows, 'flag_operating_losses')
-    top_it = top_of(rows, 'institution_type')
+    enr  = med_of(rows, 'enrollment_2024') or 0
+    rev  = med_of(rows, 'revenue_2024') or 0
+    acres = med_of(rows,'acreage_primary') or med_of(rows,'scraper_acres') or 0
+    pct_rural    = pct_of(rows, 'flag_rural_suburban')
+    pct_op_loss  = pct_of(rows, 'flag_operating_losses')
+    pct_neg_nw   = pct_of(rows, 'flag_negative_net_worth')
+    pct_enr_dec  = pct_of(rows, 'flag_enrollment_decline')
+    pct_land     = pct_of(rows, 'flag_land_potential')
+    top_urb = (top_of(rows, 'urbanization') or '').split(':')[0].strip()
 
-    is_4yr = '4-year' in top_it
-    is_2yr = '2-year' in top_it
+    types = Counter(r.get('institution_type','') for r in rows)
+    pct_public = sum(v for k,v in types.items() if 'Public' in k) / max(len(rows),1) * 100
+    pct_pnp    = sum(v for k,v in types.items() if 'Non-Profit' in k) / max(len(rows),1) * 100
+    pct_pfp    = sum(v for k,v in types.items() if 'For-Profit' in k) / max(len(rows),1) * 100
+    top_region = Counter(STATE_REGION.get(r.get('state',''),'Unknown') for r in rows).most_common(1)[0][0]
 
-    if is_4yr and enr > 5000:
-        name, icon, color = 'Public Universities', '🏛', '#3b82f6'
-        desc = ('Large public 4-year universities and state colleges. '
-                'Substantial land holdings, stable enrollment, and strong revenue bases. '
-                'Low acquisition probability but useful as market comparables.')
-        hv_angle = 'Low direct acquisition target — useful as regional comparables and partnership candidates.'
-    elif is_2yr and enr > 1000:
-        name, icon, color = 'Public Community Colleges', '🎓', '#6c5ce7'
-        desc = ('Public 2-year community colleges serving regional populations. '
-                'Financially stable with meaningful acreage, often in suburban or rural settings. '
-                'Underleveraged land holdings relative to their footprint.')
-        hv_angle = 'Monitor for campus consolidations and satellite facility dispositions. Acreage often underleveraged.'
-    else:
-        name, icon, color = 'Distressed Public Institutions', '⚠️', '#ffa502'
-        desc = ('Smaller or struggling public institutions — branch campuses, admin units, '
-                'and underfunded community colleges. Enrollment pressure and budget constraints '
-                'creating long-term viability questions.')
-        hv_angle = 'Watch list — public institutions occasionally divest satellite campuses and auxiliary facilities.'
+    urgency, land, fit = axis_scores(rows, osm_scores, 'IPEDS')
 
-    return _make_cluster(cid, name, icon, color, desc, hv_angle, rows, 'IPEDS')
+    # ── Naming based on what the data actually shows ──────────────────────────
 
+    # High closure risk + enrollment collapse → most urgent target
+    if cr > 0.25 and pct_enr_dec > 60:
+        name, icon, color = 'Enrollment Collapse — High Risk', '📉', '#ff4757'
+        desc = ('Institutions facing catastrophic enrollment decline with elevated closure '
+                'risk scores. Predominantly small for-profit programs but includes struggling '
+                'private colleges. Many are past the point of recovery.')
+        hv_angle = 'Highest transaction probability. Small footprint limits land value but campus closures are imminent — build relationships now.'
+        priority = 1
 
-def name_pnp_cluster(rows, cid):
-    ds      = med_of(rows, 'distress_score')
-    enr     = med_of(rows, 'enrollment_2024')
-    acres   = med_of(rows, 'acreage_primary') or med_of(rows, 'scraper_acres') or 0
-    cr      = med_of(rows, 'closure_risk_score') or 0
-    pct_op_loss = pct_of(rows, 'flag_operating_losses')
-    pct_rural   = pct_of(rows, 'flag_rural_suburban')
-    top_urb     = (top_of(rows, 'urbanization') or '').split(':')[0].strip()
+    # Balance sheet crisis — negative net worth widespread
+    elif pct_neg_nw > 50:
+        name, icon, color = 'Balance Sheet Crisis', '🔴', '#ff4757'
+        desc = ('Institutions with widespread negative net worth — liabilities exceed assets '
+                'across most of the cluster. Often larger institutions (community colleges, '
+                'public 4-years) running persistent operating losses. Structural insolvency.')
+        hv_angle = 'Distress is deep and structural. Larger campuses mean more land — sort by acreage for acquisition targets.'
+        priority = 2
 
-    if cr > 0.35 and ds > 30:
-        name, icon, color = 'High-Risk Private Colleges', '🔴', '#ff4757'
-        desc = ('Small private non-profit colleges with elevated closure risk scores and '
-                'high distress — median enrollment under 300, operating losses common, '
-                'and many showing negative net worth trends. Imminent restructuring candidates.')
-        hv_angle = 'PRIORITY PIPELINE. Highest closure probability in the NP segment. Many will transact within 3-5 years.'
+    # 100% rural
+    elif top_urb == 'Rural' and pct_public > 50:
+        name, icon, color = 'Rural Public Colleges', '🌲', '#00b894'
+        desc = ('Rural public 2-year colleges and branch campuses. Stable finances but '
+                'facing demographic headwinds. Meaningful acreage in genuinely rural '
+                'settings — the strongest land and environment profile in the dataset.')
+        hv_angle = 'Best long-term land targets. Rural location + public ownership means facilities will eventually consolidate or divest.'
+        priority = 3
+
+    # Town-based colleges
+    elif top_urb == 'Town':
+        name, icon, color = 'Small Town Colleges', '🏘', '#74b9ff'
+        desc = ('Colleges located in small towns and rural-fringe areas. Mix of public '
+                'community colleges and private institutions. Good acreage, authentic rural '
+                'character, and moderate financial pressure make this a strong pipeline segment.')
+        hv_angle = 'Strong pipeline segment. Town-based campuses often have the best combination of accessible location and meaningful land.'
+        priority = 3
+
+    # 100% suburban
+    elif top_urb == 'Suburb':
+        name, icon, color = 'Suburban Campus Mix', '🏫', '#a29bfe'
+        desc = ('Suburban institutions across all ownership types. Meaningful acreage '
+                'but proximity to metros reduces programming fit for outdoor thesis. '
+                'Financial health is moderate — watch list for campus consolidations.')
+        hv_angle = 'Secondary pipeline. Suburban campuses have land but environment scores will be penalized for urban proximity.'
+        priority = 4
+
+    # 100% city
     elif top_urb == 'City':
-        name, icon, color = 'Urban Private NP Colleges', '🏙', '#ff6b35'
-        desc = ('Urban private non-profit colleges concentrated in city markets. '
-                'Stable enrollment but operating margins thin. Asset value driven by '
-                'urban real estate rather than campus acreage.')
-        hv_angle = 'Urban land value play. Central locations and building assets can exceed functional campus value.'
+        name, icon, color = 'Urban Institutions', '🏙', '#ff6b35'
+        desc = ('Urban institutions across all ownership types — city-concentrated with '
+                'minimal acreage and low rural character. Financial pressure is moderate. '
+                'Asset value is in the real estate, not the surrounding environment.')
+        hv_angle = 'Low fit for outdoor/wellness thesis. Urban real estate plays only — sort by acreage for building asset value.'
+        priority = 5
+
     else:
-        name, icon, color = 'Rural & Suburban Private Colleges', '🌲', '#00b894'
-        desc = ('Private non-profit colleges in suburban and rural settings with meaningful '
-                'acreage (median ~100 acres). Financially moderate with lower closure risk '
-                'but carrying operating loss exposure. The classic Hummingbird land asset profile.')
-        hv_angle = 'PRIMARY LAND TARGET. 100ac median, suburban/rural locations, moderate distress. Build relationships now.'
+        name, icon, color = 'Mixed Profile — Watch List', '⚠️', '#ffa502'
+        desc = ('Institutions with mixed geographic and financial profiles. Moderate distress '
+                'across varied ownership types and locations. Worth monitoring as '
+                'demographic pressures intensify.')
+        hv_angle = 'Build relationships now. These become more actionable as enrollment demographics shift over the next 5 years.'
+        priority = 4
 
-    return _make_cluster(cid, name, icon, color, desc, hv_angle, rows, 'IPEDS')
+    return _make_cluster(cid, name, icon, color, desc, hv_angle, priority,
+                         rows, 'IPEDS', osm_scores, urgency, land, fit)
 
+# ---------------------------------------------------------------------------
+# 990 cluster naming
+# ---------------------------------------------------------------------------
+def name_990_cluster(rows, cid, osm_scores):
+    urgency, land, fit = axis_scores(rows, osm_scores, '990')
 
-def name_pfp_cluster(rows, cid):
-    ds   = med_of(rows, 'distress_score')
-    enr  = med_of(rows, 'enrollment_2024')
-    rev  = med_of(rows, 'revenue_2024') or 0
-    pct_small = pct_of(rows, 'flag_small_enrollment')
-    pct_enr_dec = pct_of(rows, 'flag_enrollment_decline')
-    pct_op_loss = pct_of(rows, 'flag_operating_losses')
-    acres = med_of(rows, 'acreage_primary') or med_of(rows, 'scraper_acres') or 0
+    ds   = med_of(rows,'distress_score')
+    rev  = med_of(rows,'revenue_2024') or 0
+    ppe  = med_of(rows,'plant_property_equipment') or 0
+    acres = med_of(rows,'scraper_acres') or med_of(rows,'osm_acres') or 0
+    eq   = med_of(rows,'equity_ratio') or 0
 
-    if enr < 150 and pct_small > 85:
-        name, icon, color = 'Micro Vocational Schools', '✂️', '#a29bfe'
-        desc = ('Tiny for-profit trade and vocational programs — cosmetology, barbering, '
-                'massage therapy, and similar. Median enrollment under 150, urban-concentrated, '
-                'minimal physical footprint. High distress, low asset value.')
-        hv_angle = 'Low direct value — no meaningful land assets. Monitor for license/accreditation collapses.'
-    elif pct_enr_dec > 25 and ds > 30:
-        name, icon, color = 'Declining For-Profit Colleges', '📉', '#ff4757'
-        desc = ('Mid-size for-profit colleges with accelerating enrollment decline and '
-                'mounting financial pressure. Often facing regulatory scrutiny. '
-                'Some have real campus assets worth recovering post-closure.')
-        hv_angle = 'Opportunistic — target post-closure or receivership scenarios where campus assets are available.'
-    else:
-        name, icon, color = 'For-Profit Trade Schools', '🔧', '#fd79a8'
-        desc = ('Small-to-mid for-profit trade and career schools with moderate distress. '
-                'Primarily 2-year programs in urban markets. Limited land value but '
-                'potential lease or facility reuse scenarios.')
-        hv_angle = 'Limited direct value. Facility lease-back or sublease plays possible in strong urban markets.'
+    pct_op_loss  = pct_of(rows,'flag_990_operating_loss')
+    pct_neg_ast  = pct_of(rows,'flag_990_negative_net_assets')
+    pct_hi_debt  = pct_of(rows,'flag_990_high_debt')
+    pct_consec   = pct_of(rows,'flag_990_consecutive_losses')
+    pct_rev_dec  = pct_of(rows,'flag_990_revenue_decline_1yr')
 
-    return _make_cluster(cid, name, icon, color, desc, hv_angle, rows, 'IPEDS')
+    top_type   = top_of(rows,'institution_type')
+    top_region = Counter(STATE_REGION.get(r.get('state',''),'Unknown') for r in rows).most_common(1)[0][0]
+    types      = Counter(r.get('institution_type','') for r in rows)
 
-
-def name_990_cluster(rows, cid):
-    ds   = med_of(rows, 'distress_score')
-    rev  = med_of(rows, 'revenue_2024') or 0
-    ppe  = med_of(rows, 'plant_property_equipment') or 0
-    acres = med_of(rows, 'scraper_acres') or med_of(rows, 'osm_acres') or 0
-    eq   = med_of(rows, 'equity_ratio') or 0
-
-    pct_op_loss  = pct_of(rows, 'flag_990_operating_loss')
-    pct_neg_ast  = pct_of(rows, 'flag_990_negative_net_assets')
-    pct_hi_debt  = pct_of(rows, 'flag_990_high_debt')
-    pct_consec   = pct_of(rows, 'flag_990_consecutive_losses')
-    pct_rev_dec  = pct_of(rows, 'flag_990_revenue_decline_1yr')
-
-    top_type = top_of(rows, 'institution_type')
-    types = Counter(r.get('institution_type', '') for r in rows)
-
-    # Detect dormant/near-closed: near-zero revenue, high revenue decline, but not insolvent
     is_dormant = rev < 75000 and pct_rev_dec > 70 and pct_neg_ast < 10
 
     if is_dormant:
         name, icon, color = 'Dormant / Near-Closed', '💤', '#636e72'
-        desc = ('Organizations with near-zero revenue and steep revenue decline suggesting '
-                'they are dormant, winding down, or effectively closed. '
-                'Balance sheets may appear clean but operational activity has essentially ceased.')
-        hv_angle = 'Low value as operating entities. Title search and asset recovery plays only.'
-    elif top_type == 'Housing/Residential' and pct_neg_ast > 80:
+        desc = ('Organizations with near-zero revenue and steep decline — effectively dormant '
+                'or winding down. Balance sheets may appear clean but operational activity '
+                'has essentially ceased.')
+        hv_angle = 'Low operational value. Title search and asset recovery only — sort by acreage for land plays.'
+        priority = 5
+
+    elif top_type == 'Housing/Residential' and pct_neg_ast > 75 and ppe > 500000:
         name, icon, color = 'Insolvent Housing Nonprofits', '🏘', '#ff4757'
-        desc = ('Housing and residential nonprofits with deeply negative net assets and '
-                'significant physical plant. Structurally insolvent but operationally active. '
-                'Real estate assets often exceed remaining organizational value.')
-        hv_angle = 'Real estate recovery play. PPE median significant — buildings may be viable for adaptive reuse.'
-    elif ds > 70 and pct_neg_ast > 70 and pct_hi_debt > 80:
-        name, icon, color = 'Acutely Distressed Nonprofits', '🔴', '#ff4757'
-        desc = ('The most severely distressed cluster — highest distress scores, deeply negative '
-                'equity, and near-universal operating losses. Religious, recreation, and youth '
-                'organizations dominate. Many are functionally at end-of-life.')
-        hv_angle = 'Late-stage distress. Fastest path to transaction — sort by acreage and PPE for land recovery value.'
-    elif pct_neg_ast > 75 and pct_hi_debt > 85 and pct_op_loss > 85:
-        name, icon, color = 'Insolvent Educational & Faith Orgs', '🏫', '#ff6b35'
-        desc = ('Educational institutions and faith organizations that are operationally active '
-                'but deeply insolvent — 80%+ negative net assets and near-universal operating '
-                'losses. Often running camps, retreat centers, or community education programs.')
-        hv_angle = 'Facility acquisition targets. Screen by PPE and acreage — many hold real physical plant worth recovering.'
+        desc = ('Housing and residential nonprofits that are structurally insolvent but '
+                'operationally active. Significant physical plant — buildings are real. '
+                'Real estate asset value typically exceeds remaining organizational value.')
+        hv_angle = 'Real estate recovery play. PPE median meaningful — buildings viable for hospitality or residential conversion.'
+        priority = 2
+
+    elif ds > 70 and pct_neg_ast > 75 and pct_hi_debt > 85:
+        name, icon, color = 'Acutely Distressed — High Urgency', '🔴', '#ff4757'
+        desc = ('The most severely distressed cluster across all metrics — highest distress '
+                'scores, deeply negative equity, near-universal losses. Religious, recreation '
+                'and youth organizations dominate. Many are at end-of-life.')
+        hv_angle = 'Fastest transaction path. Sort by acreage and PPE — the ones with land are direct acquisition targets.'
+        priority = 1
+
     elif pct_op_loss < 5 and pct_consec < 5 and pct_hi_debt > 50:
         name, icon, color = 'Debt-Burdened but Operational', '⚡', '#ffa502'
-        desc = ('Nonprofits that are currently cash-flow positive and not running losses, '
-                'but carry heavy debt loads and in many cases negative net assets. '
-                '"Zombie" organizations — functioning today but structurally fragile.')
-        hv_angle = 'Watch list — these orgs are one bad year from crisis. Build relationships early.'
-    elif top_type == 'Agriculture/Farm':
-        name, icon, color = 'Distressed Ag & Farm Orgs', '🌾', '#00b894'
-        desc = ('Agricultural and farm nonprofits under financial stress. '
-                'Typically very small revenue but often holding land assets. '
-                'Conservation easements and agricultural land plays relevant here.')
-        hv_angle = 'Agricultural land potential. Conservation easement or farm-to-table programming conversion.'
+        desc = ('Currently cash-flow positive but carrying heavy debt and in many cases '
+                'negative net assets. Zombie organizations — functioning today but '
+                'structurally fragile. One bad year triggers crisis.')
+        hv_angle = 'Build relationships early. Low urgency today but high conversion probability in 2-4 years.'
+        priority = 4
+
+    elif types.get('Recreation/Camp',0) + types.get('Environmental/Conservation',0) > len(rows)*0.25:
+        name, icon, color = 'Outdoor & Conservation Orgs', '🌲', '#00b894'
+        desc = ('Recreation, camp, and conservation nonprofits with meaningful land and facility '
+                'assets. Direct programming fit with HV outdoor thesis. Financial distress '
+                'is real but asset base is strong.')
+        hv_angle = 'PRIMARY 990 TARGET. Recreation/camp facilities often have exactly the land and infrastructure HV needs.'
+        priority = 1
+
     else:
-        name, icon, color = 'Distressed Community Orgs', '🤝', '#74b9ff'
-        desc = ('Community-serving nonprofits — youth development, recreation, religious, '
-                'and human services — showing financial stress. Varied asset profiles. '
-                'Many hold camp, retreat, or community facility real estate.')
-        hv_angle = 'Camp and retreat facility plays. Screen by PPE and acreage for real estate potential.'
+        name, icon, color = 'Insolvent Educational & Faith', '🏫', '#ff6b35'
+        desc = ('Educational institutions and faith organizations that are operationally active '
+                'but deeply insolvent. Often running camps, retreat centers, or community '
+                'education programs with real physical facilities.')
+        hv_angle = 'Facility acquisition play. Screen for retreat centers, camps, and conference facilities by PPE and acreage.'
+        priority = 3
 
-    return _make_cluster(cid, name, icon, color, desc, hv_angle, rows, '990')
+    return _make_cluster(cid, name, icon, color, desc, hv_angle, priority,
+                         rows, '990', osm_scores, urgency, land, fit)
 
-
-def _make_cluster(cid, name, icon, color, desc, hv_angle, rows, source):
-    ds  = med_of(rows, 'distress_score')
-    cr  = med_of(rows, 'closure_risk_score') if source == 'IPEDS' else None
-    enr = med_of(rows, 'enrollment_2024') if source == 'IPEDS' else None
-    rev = med_of(rows, 'revenue_2024') or 0
-    acres_val = med_of(rows, 'acreage_primary') or med_of(rows, 'scraper_acres') or med_of(rows, 'osm_acres') or 0
-    ppe = med_of(rows, 'plant_property_equipment') if source == '990' else None
-    top_region = Counter(STATE_REGION.get(r.get('state', ''), 'Unknown') for r in rows).most_common(1)[0][0]
+# ---------------------------------------------------------------------------
+# Cluster object builder
+# ---------------------------------------------------------------------------
+def _make_cluster(cid, name, icon, color, desc, hv_angle, priority,
+                  rows, source, osm_scores, urgency, land, fit):
+    ds   = med_of(rows,'distress_score')
+    cr   = med_of(rows,'closure_risk_score') if source=='IPEDS' else None
+    enr  = med_of(rows,'enrollment_2024') if source=='IPEDS' else None
+    rev  = med_of(rows,'revenue_2024') or 0
+    acres = med_of(rows,'acreage_primary') or med_of(rows,'scraper_acres') or med_of(rows,'osm_acres') or 0
+    ppe  = med_of(rows,'plant_property_equipment') if source=='990' else None
+    top_region = Counter(STATE_REGION.get(r.get('state',''),'Unknown') for r in rows).most_common(1)[0][0]
 
     stats = {
-        'median_distress': round(ds, 1) if ds else 0,
-        'median_acres': round(acres_val, 1),
-        'top_region': top_region,
-        'count': len(rows),
+        'median_distress': round(ds,1) if ds else 0,
+        'median_acres':    round(acres,1),
+        'top_region':      top_region,
+        'urgency_score':   urgency,
+        'land_score':      land,
+        'fit_score':       fit,
+        'osm_scraped_pct': round(sum(1 for r in rows if osm_scores.get(r.get('institution_name',''),{}).get('score') is not None) / max(len(rows),1) * 100),
     }
 
     if source == 'IPEDS':
         stats.update({
-            'median_enrollment': int(round(enr)) if enr else 0,
-            'median_revenue_m': round(rev / 1e6, 1) if rev else 0,
-            'median_closure_risk': round(cr, 3) if cr else 0,
-            'pct_enrollment_decline': pct_of(rows, 'flag_enrollment_decline'),
-            'pct_operating_losses':   pct_of(rows, 'flag_operating_losses'),
-            'pct_negative_net_worth': pct_of(rows, 'flag_negative_net_worth'),
-            'pct_land_potential':     pct_of(rows, 'flag_land_potential'),
-            'pct_rural':              pct_of(rows, 'flag_rural_suburban'),
-            'top_type': top_of(rows, 'institution_type'),
-            'top_urb':  (top_of(rows, 'urbanization') or '').split(':')[0].strip(),
+            'median_enrollment':  int(round(enr)) if enr else 0,
+            'median_revenue_m':   round(rev/1e6,1) if rev else 0,
+            'median_closure_risk':round(cr,3) if cr else 0,
+            'pct_enrollment_decline': pct_of(rows,'flag_enrollment_decline'),
+            'pct_operating_losses':   pct_of(rows,'flag_operating_losses'),
+            'pct_negative_net_worth': pct_of(rows,'flag_negative_net_worth'),
+            'pct_land_potential':     pct_of(rows,'flag_land_potential'),
+            'pct_rural':              pct_of(rows,'flag_rural_suburban'),
         })
     else:
         stats.update({
-            'median_revenue_k': int(round(rev / 1000)) if rev else 0,
-            'median_ppe_k':     int(round(ppe / 1000)) if ppe else 0,
-            'pct_operating_loss':    pct_of(rows, 'flag_990_operating_loss'),
-            'pct_negative_assets':   pct_of(rows, 'flag_990_negative_net_assets'),
-            'pct_high_debt':         pct_of(rows, 'flag_990_high_debt'),
-            'pct_consecutive_losses':pct_of(rows, 'flag_990_consecutive_losses'),
-            'pct_revenue_decline':   pct_of(rows, 'flag_990_revenue_decline_1yr'),
-            'top_type': top_of(rows, 'institution_type'),
+            'median_revenue_k':      int(round(rev/1000)) if rev else 0,
+            'median_ppe_k':          int(round(ppe/1000)) if ppe else 0,
+            'pct_operating_loss':    pct_of(rows,'flag_990_operating_loss'),
+            'pct_negative_assets':   pct_of(rows,'flag_990_negative_net_assets'),
+            'pct_high_debt':         pct_of(rows,'flag_990_high_debt'),
+            'pct_consecutive_losses':pct_of(rows,'flag_990_consecutive_losses'),
+            'pct_revenue_decline':   pct_of(rows,'flag_990_revenue_decline_1yr'),
         })
 
     return {
         'id': cid, 'name': name, 'icon': icon, 'color': color,
-        'desc': desc, 'hv_angle': hv_angle,
+        'desc': desc, 'hv_angle': hv_angle, 'priority': priority,
         'count': len(rows), 'source': source, 'stats': stats,
-        'rows': build_preview_rows(rows, source),
+        'rows': build_preview_rows(rows, source, osm_scores),
     }
-
 
 # ---------------------------------------------------------------------------
 # Preview rows
 # ---------------------------------------------------------------------------
-def build_preview_rows(cluster_rows, source):
-    sorted_rows = sorted(cluster_rows, key=lambda r: -(fv(r, 'distress_score') or 0))[:200]
+def build_preview_rows(cluster_rows, source, osm_scores):
+    sorted_rows = sorted(cluster_rows, key=lambda r: -(fv(r,'distress_score') or 0))[:200]
     out = []
     for r in sorted_rows:
-        acres = fv(r, 'acreage_primary') or fv(r, 'scraper_acres') or fv(r, 'osm_acres')
-        rev   = fv(r, 'revenue_2024')
-        enr   = fv(r, 'enrollment_2024')
-        cr    = fv(r, 'closure_risk_score')
+        acres = fv(r,'acreage_primary') or fv(r,'scraper_acres') or fv(r,'osm_acres')
+        rev   = fv(r,'revenue_2024')
+        enr   = fv(r,'enrollment_2024')
+        cr    = fv(r,'closure_risk_score')
+        osm_s = osm_scores.get(r.get('institution_name',''),{}).get('score')
         out.append({
-            'name':        r.get('institution_name', ''),
-            'state':       r.get('state', ''),
-            'city':        r.get('city', ''),
-            'type':        r.get('institution_type', ''),
-            'distress':    round(fv(r, 'distress_score') or 0, 1),
-            'category':    r.get('distress_category', ''),
-            'revenue':     round(rev / 1000, 1) if rev else None,
+            'name':        r.get('institution_name',''),
+            'state':       r.get('state',''),
+            'city':        r.get('city',''),
+            'type':        r.get('institution_type',''),
+            'distress':    round(fv(r,'distress_score') or 0,1),
+            'category':    r.get('distress_category',''),
+            'revenue':     round(rev/1000,1) if rev else None,
             'enrollment':  int(round(enr)) if enr else None,
-            'acres':       round(acres, 1) if acres else None,
-            'closure_risk': round(cr, 3) if cr else None,
-            'risk_tier':   r.get('risk_tier', ''),
-            'urbanization': r.get('urbanization', ''),
+            'acres':       round(acres,1) if acres else None,
+            'closure_risk':round(cr,3) if cr else None,
+            'env_score':   round(osm_s,1) if osm_s is not None else None,
+            'risk_tier':   r.get('risk_tier',''),
+            'urbanization':r.get('urbanization',''),
         })
     return out
 
-
 # ---------------------------------------------------------------------------
-# HTML generation
+# HTML
 # ---------------------------------------------------------------------------
 def build_html(ipeds_clusters, hb990_clusters, meta):
     ipeds_js = json.dumps(sanitize_for_json([{
-        'id': c['id'], 'name': c['name'], 'icon': c['icon'], 'color': c['color'],
-        'desc': c['desc'], 'hv_angle': c['hv_angle'],
-        'count': c['count'], 'source': c['source'],
-        'stats': c['stats'], 'rows': c['rows'],
+        'id':c['id'],'name':c['name'],'icon':c['icon'],'color':c['color'],
+        'desc':c['desc'],'hv_angle':c['hv_angle'],'priority':c['priority'],
+        'count':c['count'],'source':c['source'],'stats':c['stats'],'rows':c['rows'],
     } for c in ipeds_clusters]), ensure_ascii=False)
 
     hb990_js = json.dumps(sanitize_for_json([{
-        'id': c['id'], 'name': c['name'], 'icon': c['icon'], 'color': c['color'],
-        'desc': c['desc'], 'hv_angle': c['hv_angle'],
-        'count': c['count'], 'source': c['source'],
-        'stats': c['stats'], 'rows': c['rows'],
+        'id':c['id'],'name':c['name'],'icon':c['icon'],'color':c['color'],
+        'desc':c['desc'],'hv_angle':c['hv_angle'],'priority':c['priority'],
+        'count':c['count'],'source':c['source'],'stats':c['stats'],'rows':c['rows'],
     } for c in hb990_clusters]), ensure_ascii=False)
 
     total   = sum(c['count'] for c in ipeds_clusters) + sum(c['count'] for c in hb990_clusters)
     n_ipeds = sum(c['count'] for c in ipeds_clusters)
     n_990   = sum(c['count'] for c in hb990_clusters)
-    osm_pct = meta.get('osm_pct', 0)
-    run_date = meta.get('run_date', '')
-    osm_scraped = meta.get('osm_scraped', 0)
+    run_date     = meta.get('run_date','')
+    osm_scraped  = meta.get('osm_scraped',0)
+    osm_pct      = meta.get('osm_pct',0)
 
-    return """<!DOCTYPE html>
+    # Build HTML — stored in parts to avoid Python string escape issues
+    parts = []
+    parts.append("""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -610,213 +709,140 @@ def build_html(ipeds_clusters, hb990_clusters, meta):
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root {
-  --bg:#0f1117; --surface:#181a20; --surface2:#1e2028; --border:#2a2d37;
-  --text:#e2e4e9; --text2:#8b8fa3; --text3:#3d4f6e;
-  --accent:#6c5ce7; --accent2:#a29bfe;
-  --critical:#ff4757; --high:#ff6b35; --elevated:#ffa502;
-  --moderate:#3b82f6; --low:#10b981;
-  --ipeds:#6c5ce7; --hb990:#00b894;
-  --font:'DM Sans',-apple-system,sans-serif;
-  --mono:'JetBrains Mono',monospace;
-}
-*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
-html,body { background:var(--bg); color:var(--text); font-family:var(--font); font-size:14px; min-height:100vh; }
-
-nav { position:sticky; top:0; z-index:100; display:flex; align-items:center; gap:14px;
-      padding:0 20px; height:52px; background:var(--surface); border-bottom:1px solid var(--border); }
-.nav-logo { font-size:16px; font-weight:700; letter-spacing:-.5px;
-            background:linear-gradient(135deg,var(--accent2),#74b9ff);
-            -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
-.nav-sep  { width:1px; height:18px; background:var(--border); }
-.nav-sub  { font-size:11px; color:var(--text2); font-weight:500; }
-.nav-spacer { flex:1; }
-.nav-back { display:flex; align-items:center; gap:6px; padding:5px 12px; border-radius:6px;
-             background:var(--surface2); border:1px solid var(--border); color:var(--text2);
-             font-size:11px; font-weight:600; text-decoration:none; transition:all .15s; }
-.nav-back:hover { border-color:var(--accent); color:var(--text); }
-
-.page { max-width:1280px; margin:0 auto; padding:24px 20px 80px; }
-
-/* Methodology section */
-.methodology {
-  background:var(--surface); border:1px solid var(--border); border-radius:10px;
-  margin-bottom:28px; overflow:hidden;
-}
-.meth-toggle {
-  display:flex; align-items:center; gap:10px; padding:14px 18px;
-  cursor:pointer; user-select:none; transition:background .15s;
-}
-.meth-toggle:hover { background:var(--surface2); }
-.meth-toggle-label {
-  font-family:var(--mono); font-size:10px; color:var(--accent2);
-  text-transform:uppercase; letter-spacing:1.5px; flex:1;
-}
-.meth-toggle-sub { font-size:11px; color:var(--text2); }
-.meth-arrow { font-size:11px; color:var(--text2); transition:transform .2s; }
-.meth-arrow.open { transform:rotate(180deg); }
-.meth-body { display:none; padding:0 18px 18px; }
-.meth-body.open { display:block; }
-.meth-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
-.meth-card {
-  background:var(--surface2); border:1px solid var(--border); border-radius:8px;
-  padding:14px; border-left:3px solid var(--accent);
-}
-.meth-card.hb990 { border-left-color:var(--hb990); }
-.meth-card-title {
-  font-family:var(--mono); font-size:10px; text-transform:uppercase;
-  letter-spacing:1px; margin-bottom:8px;
-}
-.meth-card.hb990 .meth-card-title { color:var(--hb990); }
-.meth-card:not(.hb990) .meth-card-title { color:var(--accent2); }
-.meth-card p { font-size:11px; color:var(--text2); line-height:1.7; margin-bottom:8px; }
-.meth-card p:last-child { margin-bottom:0; }
-.meth-card b { color:var(--text); font-weight:600; }
-.meth-feats {
-  display:flex; flex-wrap:wrap; gap:4px; margin-top:8px;
-}
-.meth-feat {
-  padding:2px 7px; border-radius:3px; font-family:var(--mono); font-size:9px;
-  background:rgba(255,255,255,.04); border:1px solid var(--border); color:var(--text2);
-}
-.meth-caveat {
-  background:rgba(255,165,2,.06); border:1px solid rgba(255,165,2,.2);
-  border-radius:6px; padding:10px 14px; font-size:11px; color:#c49a00; line-height:1.6;
-}
-.meth-caveat b { color:#ffa502; }
-.meth-meta {
-  display:flex; gap:16px; margin-top:12px; padding-top:12px;
-  border-top:1px solid var(--border); flex-wrap:wrap;
-}
-.meth-meta-item { font-family:var(--mono); font-size:9px; color:var(--text2); }
-.meth-meta-item b { color:var(--text); }
-
-/* Hero */
-.page-eyebrow { font-family:var(--mono); font-size:10px; color:var(--accent2);
-                letter-spacing:2px; text-transform:uppercase; margin-bottom:8px; }
-.page-title { font-size:26px; font-weight:700; letter-spacing:-.5px; margin-bottom:6px; }
-.page-sub   { font-size:12px; color:var(--text2); line-height:1.6; max-width:680px; margin-bottom:20px; }
-
-/* Source tabs */
-.source-tabs { display:flex; gap:0; margin-bottom:20px; border-bottom:1px solid var(--border); }
-.s-tab { padding:8px 18px; border:1px solid transparent; border-bottom:none;
-         border-radius:6px 6px 0 0; background:transparent; color:var(--text2);
-         font-family:var(--font); font-size:12px; font-weight:600; cursor:pointer;
-         transition:all .15s; margin-bottom:-1px; }
-.s-tab.active { background:var(--surface); border-color:var(--border);
-                border-bottom-color:var(--surface); color:var(--text); }
-.s-tab:hover:not(.active) { color:var(--text); }
-.tc { display:inline-block; font-family:var(--mono); font-size:9px;
-      background:rgba(255,255,255,.06); border-radius:8px; padding:1px 6px; margin-left:5px; }
-.s-tab.active .tc { background:rgba(108,92,231,.15); color:var(--accent2); }
-
-/* Segment filter (IPEDS only) */
-.seg-bar { display:flex; gap:6px; margin-bottom:14px; }
-.seg-btn { padding:5px 12px; border-radius:20px; font-size:11px; font-weight:600;
-           border:1px solid var(--border); background:var(--surface2);
-           color:var(--text2); cursor:pointer; transition:all .15s; }
-.seg-btn.active { background:rgba(108,92,231,.15); border-color:rgba(108,92,231,.4); color:var(--accent2); }
-.seg-btn:hover:not(.active) { color:var(--text); border-color:var(--text3); }
-
-/* Layout */
-.layout { display:grid; grid-template-columns:290px 1fr; gap:14px; align-items:start; }
-.cards  { display:flex; flex-direction:column; gap:6px; }
-
-/* Cards */
-.card { padding:13px 13px 13px 16px; border-radius:8px; background:var(--surface);
-        border:1px solid var(--border); cursor:pointer; transition:background .15s,border-color .15s;
-        position:relative; overflow:hidden; user-select:none; }
-.card-bar { position:absolute; left:0; top:0; bottom:0; width:3px; }
-.card:hover  { background:var(--surface2); }
-.card.active { background:var(--surface2); }
-.card-hdr { display:flex; align-items:center; gap:8px; margin-bottom:5px; }
-.card-icon { font-size:15px; flex-shrink:0; }
-.card-name { font-size:12px; font-weight:600; flex:1; line-height:1.2; }
-.card-n { font-family:var(--mono); font-size:9px; color:var(--text2); }
-.card-desc { font-size:10px; color:var(--text2); line-height:1.5; margin-bottom:7px; }
-.chips { display:flex; flex-wrap:wrap; gap:3px; }
-.chip { padding:2px 6px; border-radius:3px; background:var(--surface2);
-        border:1px solid var(--border); font-family:var(--mono); font-size:9px; color:var(--text2); }
-.chip b { color:var(--text); font-weight:500; }
-
-/* Detail */
-.detail { background:var(--surface); border:1px solid var(--border);
-          border-radius:8px; overflow:hidden; position:sticky; top:68px; }
-.d-empty { padding:60px 20px; text-align:center; color:var(--text2); }
-.d-empty-arrow { font-size:24px; margin-bottom:10px; }
-.d-empty-title { font-size:13px; font-weight:600; margin-bottom:4px; }
-.d-empty-sub   { font-size:11px; }
-.d-head { padding:16px 18px; border-bottom:1px solid var(--border); background:var(--surface2);
-          display:flex; align-items:flex-start; gap:12px; }
-.dh-icon  { font-size:22px; flex-shrink:0; margin-top:1px; }
-.dh-name  { font-size:17px; font-weight:700; letter-spacing:-.3px; line-height:1.2; }
-.dh-count { font-family:var(--mono); font-size:10px; color:var(--text2); margin-top:3px; }
-.dh-desc  { font-size:11px; color:var(--text2); line-height:1.5; margin-top:5px; }
-
-/* HV angle callout */
-.hv-angle {
-  margin:0; padding:10px 16px; border-bottom:1px solid var(--border);
-  background:rgba(0,184,148,.06); border-left:3px solid var(--hb990);
-  display:flex; align-items:flex-start; gap:8px;
-}
-.hv-angle-label { font-family:var(--mono); font-size:9px; color:var(--hb990);
-                  text-transform:uppercase; letter-spacing:1px; white-space:nowrap; margin-top:1px; }
-.hv-angle-text  { font-size:11px; color:#a8e6da; line-height:1.5; }
-
-/* Stats */
-.stat-strip { display:grid; border-bottom:1px solid var(--border); }
-.stat-cell  { padding:11px 14px; border-right:1px solid var(--border); text-align:center; }
-.stat-cell:last-child { border-right:none; }
-.stat-v { font-family:var(--mono); font-size:15px; font-weight:500; display:block; }
-.stat-l { font-size:9px; color:var(--text2); text-transform:uppercase; letter-spacing:.6px; margin-top:2px; }
-
-/* Flags */
-.flags { padding:12px 16px; border-bottom:1px solid var(--border); }
-.flags-title { font-family:var(--mono); font-size:9px; color:var(--text2);
-               text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
-.frow   { display:flex; align-items:center; gap:8px; margin-bottom:5px; }
-.flabel { font-size:10px; color:var(--text2); width:155px; flex-shrink:0; }
-.fbar-wrap { flex:1; height:4px; background:var(--border); border-radius:2px; overflow:hidden; }
-.fbar { height:100%; border-radius:2px; }
-.fpct { font-family:var(--mono); font-size:9px; color:var(--text2); width:28px; text-align:right; }
-
-/* Table */
-.tbar { display:flex; align-items:center; gap:8px; padding:9px 13px;
-        border-bottom:1px solid var(--border); background:var(--surface2); }
-.tsearch { flex:1; padding:5px 8px; background:var(--bg); border:1px solid var(--border);
-           border-radius:5px; color:var(--text); font-family:var(--font); font-size:11px; outline:none; }
-.tsearch:focus { border-color:var(--accent); }
-.tcount { font-family:var(--mono); font-size:9px; color:var(--text2); white-space:nowrap; }
-.export-btn { padding:4px 10px; border-radius:5px; background:rgba(108,92,231,.1);
-              border:1px solid rgba(108,92,231,.3); color:var(--accent2);
-              font-family:var(--font); font-size:10px; font-weight:600;
-              cursor:pointer; white-space:nowrap; }
-.export-btn:hover { background:rgba(108,92,231,.2); }
-.twrap { max-height:380px; overflow-y:auto; }
-.twrap::-webkit-scrollbar { width:3px; }
-.twrap::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
-table { width:100%; border-collapse:collapse; }
-th { padding:6px 10px; text-align:left; font-family:var(--mono); font-size:9px; color:var(--text2);
-     text-transform:uppercase; letter-spacing:.6px; border-bottom:1px solid var(--border);
-     background:var(--surface2); white-space:nowrap; cursor:pointer; user-select:none; }
-th:hover { color:var(--text); }
-td { padding:6px 10px; font-size:11px; border-bottom:1px solid rgba(42,45,55,.5); vertical-align:middle; }
-tr:hover td { background:rgba(255,255,255,.015); }
-.td-name { font-weight:600; max-width:180px; }
-.td-name small { display:block; font-size:9px; color:var(--text2); font-weight:400; margin-top:1px; }
-.dp { display:inline-block; padding:2px 5px; border-radius:3px;
-      font-family:var(--mono); font-size:9px; font-weight:600; }
-.d-critical { background:rgba(255,71,87,.15);  color:#ff4757; }
-.d-high     { background:rgba(255,107,53,.15); color:#ff6b35; }
-.d-moderate { background:rgba(255,165,2,.15);  color:#ffa502; }
-.d-low      { background:rgba(59,130,246,.15); color:#74b9ff; }
-.d-healthy  { background:rgba(16,185,129,.15); color:#10b981; }
-
-@media(max-width:860px) {
-  .layout { grid-template-columns:1fr; }
-  .detail { position:static; }
-  .meth-grid { grid-template-columns:1fr; }
-}
+:root{--bg:#0f1117;--surface:#181a20;--surface2:#1e2028;--border:#2a2d37;
+--text:#e2e4e9;--text2:#8b8fa3;--accent:#6c5ce7;--accent2:#a29bfe;
+--hb990:#00b894;--font:'DM Sans',-apple-system,sans-serif;--mono:'JetBrains Mono',monospace;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh;}
+nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:14px;padding:0 20px;height:52px;background:var(--surface);border-bottom:1px solid var(--border);}
+.nav-logo{font-size:16px;font-weight:700;letter-spacing:-.5px;background:linear-gradient(135deg,var(--accent2),#74b9ff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+.nav-sep{width:1px;height:18px;background:var(--border);}
+.nav-sub{font-size:11px;color:var(--text2);font-weight:500;}
+.nav-spacer{flex:1;}
+.nav-back{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-size:11px;font-weight:600;text-decoration:none;transition:all .15s;}
+.nav-back:hover{border-color:var(--accent);color:var(--text);}
+.page{max-width:1280px;margin:0 auto;padding:24px 20px 80px;}
+.methodology{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:28px;overflow:hidden;}
+.meth-toggle{display:flex;align-items:center;gap:10px;padding:14px 18px;cursor:pointer;user-select:none;}
+.meth-toggle:hover{background:var(--surface2);}
+.meth-label{font-family:var(--mono);font-size:10px;color:var(--accent2);text-transform:uppercase;letter-spacing:1.5px;flex:1;}
+.meth-sub{font-size:11px;color:var(--text2);}
+.meth-arrow{font-size:11px;color:var(--text2);transition:transform .2s;}
+.meth-arrow.open{transform:rotate(180deg);}
+.meth-body{display:none;padding:0 18px 18px;}
+.meth-body.open{display:block;}
+.meth-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+.meth-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;border-left:3px solid var(--accent);}
+.meth-card.c990{border-left-color:var(--hb990);}
+.meth-ct{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent2);margin-bottom:8px;}
+.meth-card.c990 .meth-ct{color:var(--hb990);}
+.meth-card p{font-size:11px;color:var(--text2);line-height:1.7;margin-bottom:7px;}
+.meth-card p b{color:var(--text);}
+.meth-feats{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+.meth-feat{padding:2px 7px;border-radius:3px;font-family:var(--mono);font-size:9px;background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--text2);}
+.meth-axes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+.meth-axis{padding:12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);}
+.meth-axis-title{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
+.meth-axis-title.urgency{color:#ff6b35;}
+.meth-axis-title.land{color:#00b894;}
+.meth-axis-title.fit{color:var(--accent2);}
+.meth-axis p{font-size:10px;color:var(--text2);line-height:1.6;}
+.meth-caveat{background:rgba(255,165,2,.06);border:1px solid rgba(255,165,2,.2);border-radius:6px;padding:10px 14px;font-size:11px;color:#c49a00;line-height:1.6;}
+.meth-caveat b{color:#ffa502;}
+.meth-meta{display:flex;gap:16px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);flex-wrap:wrap;}
+.meth-mi{font-family:var(--mono);font-size:9px;color:var(--text2);}
+.meth-mi b{color:var(--text);}
+.page-eyebrow{font-family:var(--mono);font-size:10px;color:var(--accent2);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;}
+.page-title{font-size:26px;font-weight:700;letter-spacing:-.5px;margin-bottom:6px;}
+.page-sub{font-size:12px;color:var(--text2);line-height:1.6;max-width:680px;margin-bottom:20px;}
+.source-tabs{display:flex;gap:0;margin-bottom:20px;border-bottom:1px solid var(--border);}
+.s-tab{padding:8px 18px;border:1px solid transparent;border-bottom:none;border-radius:6px 6px 0 0;background:transparent;color:var(--text2);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;margin-bottom:-1px;}
+.s-tab.active{background:var(--surface);border-color:var(--border);border-bottom-color:var(--surface);color:var(--text);}
+.s-tab:hover:not(.active){color:var(--text);}
+.tc{display:inline-block;font-family:var(--mono);font-size:9px;background:rgba(255,255,255,.06);border-radius:8px;padding:1px 6px;margin-left:5px;}
+.s-tab.active .tc{background:rgba(108,92,231,.15);color:var(--accent2);}
+.layout{display:grid;grid-template-columns:290px 1fr;gap:14px;align-items:start;}
+.cards{display:flex;flex-direction:column;gap:6px;}
+.card{padding:13px 13px 13px 16px;border-radius:8px;background:var(--surface);border:1px solid var(--border);cursor:pointer;transition:background .15s,border-color .15s;position:relative;overflow:hidden;user-select:none;}
+.card-bar{position:absolute;left:0;top:0;bottom:0;width:3px;}
+.card:hover{background:var(--surface2);}
+.card.active{background:var(--surface2);}
+.card-hdr{display:flex;align-items:center;gap:8px;margin-bottom:5px;}
+.card-icon{font-size:15px;flex-shrink:0;}
+.card-name{font-size:12px;font-weight:600;flex:1;line-height:1.2;}
+.card-n{font-family:var(--mono);font-size:9px;color:var(--text2);}
+.card-desc{font-size:10px;color:var(--text2);line-height:1.5;margin-bottom:7px;}
+.chips{display:flex;flex-wrap:wrap;gap:3px;}
+.chip{padding:2px 6px;border-radius:3px;background:var(--surface2);border:1px solid var(--border);font-family:var(--mono);font-size:9px;color:var(--text2);}
+.chip b{color:var(--text);font-weight:500;}
+.axis-bars{display:flex;gap:6px;margin-top:6px;}
+.axis-bar-wrap{flex:1;}
+.axis-bar-label{font-family:var(--mono);font-size:8px;color:var(--text2);margin-bottom:2px;}
+.axis-bar-track{height:3px;background:var(--border);border-radius:2px;overflow:hidden;}
+.axis-bar-fill{height:100%;border-radius:2px;}
+.detail{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;position:sticky;top:68px;}
+.d-empty{padding:60px 20px;text-align:center;color:var(--text2);}
+.d-empty-arrow{font-size:24px;margin-bottom:10px;}
+.d-empty-title{font-size:13px;font-weight:600;margin-bottom:4px;}
+.d-empty-sub{font-size:11px;}
+.d-head{padding:16px 18px;border-bottom:1px solid var(--border);background:var(--surface2);display:flex;align-items:flex-start;gap:12px;}
+.dh-icon{font-size:22px;flex-shrink:0;margin-top:1px;}
+.dh-name{font-size:17px;font-weight:700;letter-spacing:-.3px;line-height:1.2;}
+.dh-count{font-family:var(--mono);font-size:10px;color:var(--text2);margin-top:3px;}
+.dh-desc{font-size:11px;color:var(--text2);line-height:1.5;margin-top:5px;}
+.hv-angle{margin:0;padding:10px 16px;border-bottom:1px solid var(--border);background:rgba(0,184,148,.06);border-left:3px solid var(--hb990);display:flex;align-items:flex-start;gap:8px;}
+.hv-angle-label{font-family:var(--mono);font-size:9px;color:var(--hb990);text-transform:uppercase;letter-spacing:1px;white-space:nowrap;margin-top:1px;}
+.hv-angle-text{font-size:11px;color:#a8e6da;line-height:1.5;}
+.axis-strip{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--border);}
+.axis-cell{padding:12px 14px;border-right:1px solid var(--border);text-align:center;}
+.axis-cell:last-child{border-right:none;}
+.axis-val{font-family:var(--mono);font-size:20px;font-weight:600;display:block;}
+.axis-lbl{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-top:2px;}
+.axis-sub{font-size:9px;color:var(--text2);margin-top:1px;}
+.stat-strip{display:grid;border-bottom:1px solid var(--border);}
+.stat-cell{padding:11px 14px;border-right:1px solid var(--border);text-align:center;}
+.stat-cell:last-child{border-right:none;}
+.stat-v{font-family:var(--mono);font-size:15px;font-weight:500;display:block;}
+.stat-l{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-top:2px;}
+.flags{padding:12px 16px;border-bottom:1px solid var(--border);}
+.flags-title{font-family:var(--mono);font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
+.frow{display:flex;align-items:center;gap:8px;margin-bottom:5px;}
+.flabel{font-size:10px;color:var(--text2);width:155px;flex-shrink:0;}
+.fbar-wrap{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
+.fbar{height:100%;border-radius:2px;}
+.fpct{font-family:var(--mono);font-size:9px;color:var(--text2);width:28px;text-align:right;}
+.tbar{display:flex;align-items:center;gap:8px;padding:9px 13px;border-bottom:1px solid var(--border);background:var(--surface2);}
+.tsearch{flex:1;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--font);font-size:11px;outline:none;}
+.tsearch:focus{border-color:var(--accent);}
+.tcount{font-family:var(--mono);font-size:9px;color:var(--text2);white-space:nowrap;}
+.export-btn{padding:4px 10px;border-radius:5px;background:rgba(108,92,231,.1);border:1px solid rgba(108,92,231,.3);color:var(--accent2);font-family:var(--font);font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap;}
+.export-btn:hover{background:rgba(108,92,231,.2);}
+.twrap{max-height:380px;overflow-y:auto;}
+.twrap::-webkit-scrollbar{width:3px;}
+.twrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+table{width:100%;border-collapse:collapse;}
+th{padding:6px 10px;text-align:left;font-family:var(--mono);font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--border);background:var(--surface2);white-space:nowrap;cursor:pointer;user-select:none;}
+th:hover{color:var(--text);}
+td{padding:6px 10px;font-size:11px;border-bottom:1px solid rgba(42,45,55,.5);vertical-align:middle;}
+tr:hover td{background:rgba(255,255,255,.015);}
+.td-name{font-weight:600;max-width:180px;}
+.td-name small{display:block;font-size:9px;color:var(--text2);font-weight:400;margin-top:1px;}
+.dp{display:inline-block;padding:2px 5px;border-radius:3px;font-family:var(--mono);font-size:9px;font-weight:600;}
+.d-critical{background:rgba(255,71,87,.15);color:#ff4757;}
+.d-high{background:rgba(255,107,53,.15);color:#ff6b35;}
+.d-moderate{background:rgba(255,165,2,.15);color:#ffa502;}
+.d-low{background:rgba(59,130,246,.15);color:#74b9ff;}
+.d-healthy{background:rgba(16,185,129,.15);color:#10b981;}
+.env-pill{display:inline-block;padding:2px 6px;border-radius:3px;font-family:var(--mono);font-size:9px;font-weight:600;}
+.filter-bar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;align-items:center;}
+.filter-label{font-family:var(--mono);font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-right:2px;}
+.filter-select{padding:4px 8px;border-radius:5px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:11px;outline:none;cursor:pointer;}
+.filter-select:focus{border-color:var(--accent);}
+.filter-btn{padding:4px 10px;border-radius:5px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-family:var(--font);font-size:10px;font-weight:600;cursor:pointer;transition:all .15s;}
+.filter-btn.active{background:rgba(108,92,231,.15);border-color:rgba(108,92,231,.4);color:var(--accent2);}
+.filter-btn:hover:not(.active){color:var(--text);border-color:var(--text2);}
+.filter-count{font-family:var(--mono);font-size:10px;color:var(--text2);margin-left:4px;}
+@media(max-width:860px){.layout{grid-template-columns:1fr;}.detail{position:static;}.meth-grid,.meth-axes{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
@@ -827,100 +853,102 @@ tr:hover td { background:rgba(255,255,255,.015); }
   <div class="nav-spacer"></div>
   <a href="index.html" class="nav-back">\u2190 Map</a>
 </nav>
-
 <div class="page">
-
-  <!-- Methodology section -->
   <div class="methodology">
     <div class="meth-toggle" id="methToggle">
-      <div class="meth-toggle-label">Methodology &amp; Data Notes</div>
-      <div class="meth-toggle-sub">How these clusters were built</div>
+      <div class="meth-label">Methodology &amp; Data Notes</div>
+      <div class="meth-sub">v3 \u2014 thesis-driven clustering across urgency, land, and HV fit axes</div>
       <div class="meth-arrow" id="methArrow">\u25be</div>
     </div>
     <div class="meth-body" id="methBody">
+      <div class="meth-axes">
+        <div class="meth-axis">
+          <div class="meth-axis-title urgency">Urgency Axis</div>
+          <p>How close is this institution to transacting? Combines distress score, closure risk (ML model), operating loss flags, enrollment trajectory, and solvency indicators. High urgency = near-term transaction probability.</p>
+        </div>
+        <div class="meth-axis">
+          <div class="meth-axis-title land">Land Axis</div>
+          <p>How much underleveraged physical asset is here? Combines log-acreage, land potential flags, rurality, and urbanization. High land score = meaningful real estate opportunity relative to institutional size.</p>
+        </div>
+        <div class="meth-axis">
+          <div class="meth-axis-title fit">HV Fit Axis</div>
+          <p>Does the surrounding environment match HV's outdoor/wellness programming thesis? Driven by the OSM Environment Score (0\u2013100) \u2014 a composite of named natural feature tiers, category diversity, feature density, and proximity.</p>
+        </div>
+      </div>
       <div class="meth-grid">
         <div class="meth-card">
-          <div class="meth-card-title">IPEDS Clustering \u2014 Higher Education</div>
-          <p>IPEDS institutions are <b>split by ownership type before clustering</b>: Public, Private Non-Profit, and Private For-Profit each get their own K-Means model (K=3 each, 9 total clusters). This prevents ownership type from dominating the distance metric and reveals meaningful within-type variation.</p>
-          <p><b>Feature set</b> includes distress subdomain scores (solvency, liquidity, operating, enrollment, academic, trend), closure risk score from the ML model, financial ratios (operating margin, tuition dependency), enrollment metrics (YoY and 2-year change, retention, graduation rate), acreage, revenue size, and 13 binary distress flags. Urbanization and region are one-hot encoded.</p>
-          <p><b>OSM environment categories</b> (water, outdoor recreation, protected land, etc.) are one-hot encoded for institutions that have been scraped. Currently """ + str(meta.get('osm_scraped',0)) + """ of 12,911 institutions have OSM data (\u2248""" + str(meta.get('osm_pct',0)) + """%).</p>
+          <div class="meth-ct">IPEDS \u2014 Higher Education (K=6)</div>
+          <p>All 5,912 IPEDS institutions are clustered together. <b>Institution type is not a feature</b> \u2014 it is used only for post-hoc labeling. This allows the model to discover cross-type patterns driven by urgency, land, and fit rather than simply rediscovering ownership categories.</p>
+          <p>Continuous features are standardized before clustering (zero mean, unit variance). Missing values are imputed at the column median within the full IPEDS segment.</p>
           <div class="meth-feats">
-            <span class="meth-feat">distress_score</span>
-            <span class="meth-feat">solvency_score_ipeds</span>
-            <span class="meth-feat">operating_score_ipeds</span>
-            <span class="meth-feat">enrollment_score_ipeds</span>
-            <span class="meth-feat">closure_risk_score</span>
-            <span class="meth-feat">operating_margin</span>
-            <span class="meth-feat">tuition_dependency</span>
-            <span class="meth-feat">enrollment_2024 (log)</span>
-            <span class="meth-feat">enrollment_yoy_pct</span>
-            <span class="meth-feat">enrollment_2yr_pct</span>
-            <span class="meth-feat">retention_rate</span>
-            <span class="meth-feat">graduation_rate</span>
-            <span class="meth-feat">acreage (log)</span>
-            <span class="meth-feat">revenue (log)</span>
-            <span class="meth-feat">9 distress flags</span>
-            <span class="meth-feat">urbanization (4 one-hot)</span>
-            <span class="meth-feat">region (5 one-hot)</span>
-            <span class="meth-feat">OSM cats (7 one-hot)</span>
+            <span class="meth-feat">distress_score</span><span class="meth-feat">closure_risk_score</span>
+            <span class="meth-feat">enrollment_score_ipeds</span><span class="meth-feat">solvency_score_ipeds</span>
+            <span class="meth-feat">enrollment_2yr_pct</span><span class="meth-feat">revenue_2yr_pct</span>
+            <span class="meth-feat">log_acreage</span><span class="meth-feat">flag_rural_suburban</span>
+            <span class="meth-feat">flag_land_potential</span><span class="meth-feat">osm_environment_score</span>
+            <span class="meth-feat">log_enrollment</span><span class="meth-feat">log_revenue</span>
+            <span class="meth-feat">5 distress flags</span><span class="meth-feat">4 urbanization one-hots</span>
+            <span class="meth-feat">5 region one-hots</span>
           </div>
         </div>
-        <div class="meth-card hb990">
-          <div class="meth-card-title">990 Clustering \u2014 Nonprofits</div>
-          <p>990 nonprofits are clustered together (K=5) since they share a common IRS reporting structure regardless of sub-type. Institution type is one-hot encoded as a feature so the model can still discover type-correlated patterns.</p>
-          <p><b>Feature set</b> uses 990-specific distress subdomain scores (solvency, liquidity, operating, trend, red flag), financial ratios, plant/property/equipment as a proxy for physical assets, acreage where available, and 6 binary distress flags. All 10 institution type categories are one-hot encoded.</p>
-          <p><b>Note:</b> <code>flag_land_potential</code> is not computed for 990 institutions in the current pipeline and was excluded. Acreage coverage for 990s is approximately 23% (scraper + OSM combined), so acreage features are imputed at the median for most institutions.</p>
+        <div class="meth-card c990">
+          <div class="meth-ct">990 \u2014 Nonprofits (K=5)</div>
+          <p>All 6,999 nonprofits clustered together with institution type as a one-hot feature (not a split criterion). 990 financials use IRS Form 990 reporting: plant/property/equipment as physical asset proxy, equity ratio, and 990-specific distress subdomain scores.</p>
+          <p><b>OSM Environment Score</b> is included as a feature where scraped, and imputed at median otherwise. Currently """ + str(osm_scraped) + """ institutions scraped (\u2248""" + str(osm_pct) + """% of total).</p>
           <div class="meth-feats">
-            <span class="meth-feat">distress_score</span>
-            <span class="meth-feat">solvency_score_990</span>
-            <span class="meth-feat">operating_score_990</span>
-            <span class="meth-feat">trend_score_990</span>
-            <span class="meth-feat">red_flag_score_990</span>
-            <span class="meth-feat">operating_margin</span>
-            <span class="meth-feat">equity_ratio</span>
-            <span class="meth-feat">revenue (log)</span>
-            <span class="meth-feat">assets (log)</span>
-            <span class="meth-feat">plant_property_equipment (log)</span>
-            <span class="meth-feat">acreage (log)</span>
-            <span class="meth-feat">6 distress flags</span>
-            <span class="meth-feat">10 type one-hots</span>
-            <span class="meth-feat">region (5 one-hot)</span>
-            <span class="meth-feat">OSM cats (7 one-hot)</span>
+            <span class="meth-feat">distress_score</span><span class="meth-feat">solvency/operating/trend scores</span>
+            <span class="meth-feat">red_flag_score_990</span><span class="meth-feat">equity_ratio</span>
+            <span class="meth-feat">log_ppe</span><span class="meth-feat">log_acreage</span>
+            <span class="meth-feat">osm_environment_score</span><span class="meth-feat">6 distress flags</span>
+            <span class="meth-feat">10 type one-hots</span><span class="meth-feat">5 region one-hots</span>
           </div>
         </div>
+      </div>
+      <div class="meth-card" style="margin-bottom:14px;border-left:3px solid var(--accent2);">
+        <div class="meth-ct" style="color:var(--accent2)">OSM Environment Score (0\u2013100)</div>
+        <p>Computed per institution from the OSM land scrape. <b>Feature Quality (55% weight)</b>: named natural features scored by tier \u2014 Ski Resort/National Park/Coastline (30 pts named, 11 pts unnamed), Lake/Beach/Mountain/River (22/8 pts), Hiking Trail/Wetland/Campground (14/5 pts), Golf/Marina/Park (8/3 pts). Named features score 2.9\u00d7 vs unnamed (a named lake is not Crater Lake). <b>Category Mix (30%)</b>: winter +25, water +20, outdoor recreation +20, protected land +15, natural features +10, tourism +8. <b>Feature Density (10%)</b>: log-scaled count of features found. <b>Proximity (5%)</b>: closer search radius = better density.</p>
       </div>
       <div class="meth-caveat">
-        <b>Data caveats:</b> All features are standardized (zero mean, unit variance) before clustering so no single feature dominates by scale. Continuous features with missing values are imputed at the column median within each segment \u2014 this means acreage-heavy features are somewhat diluted for institutions without land data. <b>OSM coverage is ~24% of institutions</b>; environment category features will become more discriminative as the scrape completes. Cluster assignments will shift modestly with each re-run as OSM coverage grows. Cluster names are human-assigned heuristics based on centroid inspection \u2014 they represent the dominant archetype in each group, not a guarantee about every member institution.
+        <b>Caveats:</b> OSM environment scores are imputed at the segment median for unscraped institutions \u2014 as coverage grows from """ + str(osm_scraped) + """ toward 12,911, cluster boundaries will shift. Cluster names are human-assigned archetypes based on centroid inspection; every member institution is not guaranteed to match the archetype exactly. K was chosen by elbow analysis and domain judgment.
       </div>
       <div class="meth-meta">
-        <div class="meth-meta-item">Last run: <b>""" + run_date + """</b></div>
-        <div class="meth-meta-item">IPEDS institutions: <b>""" + f"{n_ipeds:,}" + """</b></div>
-        <div class="meth-meta-item">990 institutions: <b>""" + f"{n_990:,}" + """</b></div>
-        <div class="meth-meta-item">OSM scraped: <b>""" + f"{osm_scraped:,}" + """ / 12,911</b></div>
-        <div class="meth-meta-item">K (Public/NP/FP/990): <b>3 / 3 / 3 / 5</b></div>
-        <div class="meth-meta-item">Algorithm: <b>K-Means, n_init=20, StandardScaler</b></div>
+        <div class="meth-mi">Run: <b>""" + run_date + """</b></div>
+        <div class="meth-mi">IPEDS: <b>""" + f"{n_ipeds:,}" + """</b></div>
+        <div class="meth-mi">990: <b>""" + f"{n_990:,}" + """</b></div>
+        <div class="meth-mi">OSM scraped: <b>""" + f"{osm_scraped:,}" + """ / 12,911</b></div>
+        <div class="meth-mi">K (IPEDS/990): <b>6 / 5</b></div>
+        <div class="meth-mi">Algorithm: <b>K-Means, n_init=20, StandardScaler</b></div>
       </div>
     </div>
   </div>
 
   <div class="page-eyebrow">Phase II \u00b7 Machine Learning</div>
   <div class="page-title">Opportunity Clusters</div>
-  <div class="page-sub">K-Means segmentation of """ + f"{total:,}" + """ institutions into distinct opportunity archetypes. IPEDS higher education institutions are clustered separately by ownership type (Public, Private NP, Private FP). 990 nonprofits are clustered together.</div>
+  <div class="page-sub">""" + f"{total:,}" + """ institutions segmented across three axes: <b>urgency</b> (distress trajectory), <b>land</b> (physical asset potential), and <b>HV fit</b> (environment quality score). Institution type is a label, not a clustering feature.</div>
 
   <div class="source-tabs">
-    <div class="s-tab active" id="tabIPEDS">
-      IPEDS \u2014 Higher Education <span class="tc">""" + f"{n_ipeds:,}" + """</span>
-    </div>
-    <div class="s-tab" id="tab990">
-      990 \u2014 Nonprofits <span class="tc">""" + f"{n_990:,}" + """</span>
-    </div>
+    <div class="s-tab active" id="tabIPEDS">IPEDS \u2014 Higher Education <span class="tc">""" + f"{n_ipeds:,}" + """</span></div>
+    <div class="s-tab" id="tab990">990 \u2014 Nonprofits <span class="tc">""" + f"{n_990:,}" + """</span></div>
   </div>
 
-  <div class="seg-bar" id="segBar">
-    <div class="seg-btn active" data-seg="all">All Types</div>
-    <div class="seg-btn" data-seg="public">Public</div>
-    <div class="seg-btn" data-seg="pnp">Private NP</div>
-    <div class="seg-btn" data-seg="pfp">Private FP</div>
+  <div class="filter-bar" id="filterBar">
+    <span class="filter-label">Filter:</span>
+    <select class="filter-select" id="filterType">
+      <option value="">All Institution Types</option>
+      <option value="Public">Public</option>
+      <option value="Non-Profit">Private Non-Profit</option>
+      <option value="For-Profit">Private For-Profit</option>
+    </select>
+    <select class="filter-select" id="filterAcreage">
+      <option value="">All Acreage</option>
+      <option value="any">Has Acreage Data</option>
+      <option value="10">10+ acres</option>
+      <option value="50">50+ acres</option>
+      <option value="100">100+ acres</option>
+      <option value="250">250+ acres</option>
+      <option value="500">500+ acres</option>
+    </select>
+    <span class="filter-count" id="filterCount"></span>
   </div>
 
   <div class="layout">
@@ -934,404 +962,352 @@ tr:hover td { background:rgba(255,255,255,.015); }
     </div>
   </div>
 </div>
-
 <script>
-var IPEDS_DATA = """ + ipeds_js + """;
-var HB990_DATA = """ + hb990_js + """;
-
-var src      = 'ipeds';
-var seg      = 'all';
-var activeId = null;
-var sortCol  = 'distress';
-var sortAsc  = false;
-var searchQ  = '';
-
-function getClusters() {
-  var cl = src === 'ipeds' ? IPEDS_DATA : HB990_DATA;
-  if (src !== 'ipeds' || seg === 'all') return cl;
-  return cl.filter(function(c) {
-    var s = c.stats.top_type || '';
-    if (seg === 'public') return s.indexOf('Public') >= 0;
-    if (seg === 'pnp')    return s.indexOf('Non-Profit') >= 0;
-    if (seg === 'pfp')    return s.indexOf('For-Profit') >= 0;
-    return true;
-  });
-}
-
-function renderCards() {
-  var cl = getClusters();
-  var html = '';
-  for (var i = 0; i < cl.length; i++) {
-    var c = cl[i];
-    var active = (activeId === c.id);
-    var s = c.stats;
-    var chips = '';
-    chips += '<span class="chip">Distress <b>' + s.median_distress + '</b></span>';
-    if (src === 'ipeds') {
-      chips += '<span class="chip">Enroll <b>' + (s.median_enrollment || 0).toLocaleString() + '</b></span>';
-    } else {
-      chips += '<span class="chip">Rev <b>$' + (s.median_revenue_k || 0).toLocaleString() + 'K</b></span>';
-    }
-    if (s.median_acres > 0) {
-      chips += '<span class="chip">Acres <b>' + s.median_acres + '</b></span>';
-    }
-    html += '<div class="card' + (active ? ' active' : '') + '" data-cid="' + c.id + '">';
-    html += '<div class="card-bar" style="background:' + c.color + '"></div>';
-    html += '<div class="card-hdr">';
-    html += '<div class="card-icon">' + c.icon + '</div>';
-    html += '<div class="card-name">' + c.name + '</div>';
-    html += '<div class="card-n">' + c.count.toLocaleString() + '</div>';
-    html += '</div>';
-    html += '<div class="card-desc">' + c.desc.substring(0, 120) + (c.desc.length > 120 ? '\u2026' : '') + '</div>';
-    html += '<div class="chips">' + chips + '</div>';
-    html += '</div>';
+var IPEDS_DATA=""")
+    parts.append(ipeds_js)
+    parts.append(";var HB990_DATA=")
+    parts.append(hb990_js)
+    parts.append(""";
+var src='ipeds',activeId=null,sortCol='distress',sortAsc=false,searchQ='';
+var filterType='',filterAcreage='';
+function getClusters(){return src==='ipeds'?IPEDS_DATA:HB990_DATA;}
+function envColor(s){if(s===null||s===undefined)return'#3d4f6e';if(s>=85)return'#00b894';if(s>=70)return'#10b981';if(s>=55)return'#ffa502';if(s>=35)return'#ff6b35';return'#8b8fa3';}
+function renderCards(){
+  var cl=getClusters(),html='';
+  for(var i=0;i<cl.length;i++){
+    var c=cl[i],s=c.stats,active=(activeId===c.id);
+    var urgColor=s.urgency_score>60?'#ff4757':s.urgency_score>40?'#ff6b35':'#ffa502';
+    var landColor=s.land_score>60?'#00b894':s.land_score>30?'#10b981':'#8b8fa3';
+    var fitColor=s.fit_score?envColor(s.fit_score):'#3d4f6e';
+    var chips='<span class="chip">Distress <b>'+s.median_distress+'</b></span>';
+    if(src==='ipeds')chips+='<span class="chip">Enroll <b>'+(s.median_enrollment||0).toLocaleString()+'</b></span>';
+    else chips+='<span class="chip">Rev <b>$'+(s.median_revenue_k||0).toLocaleString()+'K</b></span>';
+    if(s.median_acres>0)chips+='<span class="chip">Acres <b>'+s.median_acres+'</b></span>';
+    if(s.fit_score)chips+='<span class="chip">Env <b>'+s.fit_score+'</b></span>';
+    html+='<div class="card'+(active?' active':'')+'" data-cid="'+c.id+'">';
+    html+='<div class="card-bar" style="background:'+c.color+'"></div>';
+    html+='<div class="card-hdr"><div class="card-icon">'+c.icon+'</div>';
+    html+='<div class="card-name">'+c.name+'</div>';
+    html+='<div class="card-n">'+c.count.toLocaleString()+'</div></div>';
+    html+='<div class="card-desc">'+c.desc.substring(0,110)+(c.desc.length>110?'\u2026':'')+'</div>';
+    html+='<div class="chips">'+chips+'</div>';
+    html+='<div class="axis-bars">';
+    html+='<div class="axis-bar-wrap"><div class="axis-bar-label">Urgency</div><div class="axis-bar-track"><div class="axis-bar-fill" style="width:'+Math.min(s.urgency_score||0,100)+'%;background:'+urgColor+'"></div></div></div>';
+    html+='<div class="axis-bar-wrap"><div class="axis-bar-label">Land</div><div class="axis-bar-track"><div class="axis-bar-fill" style="width:'+Math.min(s.land_score||0,100)+'%;background:'+landColor+'"></div></div></div>';
+    html+='<div class="axis-bar-wrap"><div class="axis-bar-label">HV Fit</div><div class="axis-bar-track"><div class="axis-bar-fill" style="width:'+Math.min(s.fit_score||0,100)+'%;background:'+fitColor+'"></div></div></div>';
+    html+='</div></div>';
   }
-  if (html === '') html = '<div style="padding:20px;font-size:11px;color:var(--text2)">No clusters in this segment.</div>';
-  document.getElementById('cards').innerHTML = html;
+  if(!html)html='<div style="padding:20px;font-size:11px;color:var(--text2)">No clusters found.</div>';
+  document.getElementById('cards').innerHTML=html;
 }
-
-function selectCluster(cid) {
-  activeId = cid; searchQ = ''; sortCol = 'distress'; sortAsc = false;
+function selectCluster(cid){
+  activeId=cid;searchQ='';sortCol='distress';sortAsc=false;filterType='';filterAcreage='';
+  var fs=document.getElementById('filterType');if(fs)fs.value='';
+  var fa=document.getElementById('filterAcreage');if(fa)fa.value='';
   renderCards();
-  var cl = src === 'ipeds' ? IPEDS_DATA : HB990_DATA;
-  var c = null;
-  for (var i = 0; i < cl.length; i++) { if (cl[i].id === cid) { c = cl[i]; break; } }
-  if (!c) return;
+  var cl=getClusters(),c=null;
+  for(var i=0;i<cl.length;i++){if(cl[i].id===cid){c=cl[i];break;}}
+  if(!c)return;
   renderDetail(c);
 }
-
-function renderDetail(c) {
-  var s = c.stats;
-  var isIPEDS = (src === 'ipeds');
-
-  var statCols, statHtml = '';
-  if (isIPEDS) {
-    statCols = 4;
-    statHtml += mkStat(s.median_distress, 'Distress');
-    statHtml += mkStat((s.median_enrollment || 0).toLocaleString(), 'Enroll');
-    statHtml += mkStat(s.median_acres > 0 ? s.median_acres + ' ac' : '\u2014', 'Acres');
-    statHtml += mkStat(s.median_closure_risk ? (s.median_closure_risk * 100).toFixed(1) + '%' : '\u2014', 'Closure Risk');
-  } else {
-    statCols = 4;
-    statHtml += mkStat(s.median_distress, 'Distress');
-    statHtml += mkStat('$' + (s.median_revenue_k || 0).toLocaleString() + 'K', 'Revenue');
-    statHtml += mkStat(s.median_ppe_k ? '$' + s.median_ppe_k.toLocaleString() + 'K' : '\u2014', 'PPE');
-    statHtml += mkStat(s.median_acres > 0 ? s.median_acres + ' ac' : '\u2014', 'Acres');
+function renderDetail(c){
+  var s=c.stats,isIPEDS=(src==='ipeds');
+  var urgColor=s.urgency_score>60?'#ff4757':s.urgency_score>40?'#ff6b35':'#ffa502';
+  var landColor=s.land_score>60?'#00b894':s.land_score>30?'#10b981':'#8b8fa3';
+  var fitColor=s.fit_score?envColor(s.fit_score):'#3d4f6e';
+  var fitLabel=s.fit_score?s.fit_score+(s.osm_scraped_pct<30?' ('+s.osm_scraped_pct+'% scraped)':''):'\u2014';
+  var axisHtml='<div class="axis-strip">'
+    +'<div class="axis-cell"><span class="axis-val" style="color:'+urgColor+'">'+s.urgency_score+'</span><div class="axis-lbl">Urgency</div><div class="axis-sub">Distress trajectory</div></div>'
+    +'<div class="axis-cell"><span class="axis-val" style="color:'+landColor+'">'+s.land_score+'</span><div class="axis-lbl">Land</div><div class="axis-sub">Physical asset potential</div></div>'
+    +'<div class="axis-cell"><span class="axis-val" style="color:'+fitColor+'">'+fitLabel+'</span><div class="axis-lbl">HV Fit</div><div class="axis-sub">Env. quality score</div></div>'
+    +'</div>';
+  var statCols,statHtml='';
+  if(isIPEDS){
+    statCols=4;
+    statHtml+=mkStat(s.median_distress,'Distress')+mkStat((s.median_enrollment||0).toLocaleString(),'Enroll')
+      +mkStat(s.median_acres>0?s.median_acres+' ac':'\u2014','Acres')
+      +mkStat(s.median_closure_risk?(s.median_closure_risk*100).toFixed(1)+'%':'\u2014','Closure Risk');
+  }else{
+    statCols=4;
+    statHtml+=mkStat(s.median_distress,'Distress')+mkStat('$'+(s.median_revenue_k||0).toLocaleString()+'K','Revenue')
+      +mkStat(s.median_ppe_k?'$'+s.median_ppe_k.toLocaleString()+'K':'\u2014','PPE')
+      +mkStat(s.median_acres>0?s.median_acres+' ac':'\u2014','Acres');
   }
-
-  var flagDefs = isIPEDS
-    ? [['Enrollment Decline', s.pct_enrollment_decline, '#ff6b35'],
-       ['Operating Losses',   s.pct_operating_losses,  '#ff4757'],
-       ['Neg. Net Worth',     s.pct_negative_net_worth,'#ff4757'],
-       ['Land Potential',     s.pct_land_potential,    '#00b894']]
-    : [['Operating Loss',     s.pct_operating_loss,    '#ff6b35'],
-       ['Neg. Net Assets',    s.pct_negative_assets,   '#ff4757'],
-       ['High Debt',          s.pct_high_debt,         '#ffa502'],
-       ['Consec. Losses',     s.pct_consecutive_losses,'#ff6b35'],
-       ['Revenue Decline',    s.pct_revenue_decline,   '#ff4757']];
-
-  var flagHtml = '';
-  for (var fi = 0; fi < flagDefs.length; fi++) {
-    var fd = flagDefs[fi];
-    var pv = fd[1] || 0;
-    flagHtml += '<div class="frow">'
-      + '<div class="flabel">' + fd[0] + '</div>'
-      + '<div class="fbar-wrap"><div class="fbar" style="width:' + Math.min(pv,100) + '%;background:' + fd[2] + '"></div></div>'
-      + '<div class="fpct">' + pv + '%</div></div>';
+  var flagDefs=isIPEDS
+    ?[['Enrollment Decline',s.pct_enrollment_decline,'#ff6b35'],['Op. Losses',s.pct_operating_losses,'#ff4757'],
+      ['Neg. Net Worth',s.pct_negative_net_worth,'#ff4757'],['Land Potential',s.pct_land_potential,'#00b894']]
+    :[['Operating Loss',s.pct_operating_loss,'#ff6b35'],['Neg. Net Assets',s.pct_negative_assets,'#ff4757'],
+      ['High Debt',s.pct_high_debt,'#ffa502'],['Consec. Losses',s.pct_consecutive_losses,'#ff6b35'],
+      ['Revenue Decline',s.pct_revenue_decline,'#ff4757']];
+  var flagHtml='';
+  for(var fi=0;fi<flagDefs.length;fi++){
+    var fd=flagDefs[fi],pv=fd[1]||0;
+    flagHtml+='<div class="frow"><div class="flabel">'+fd[0]+'</div>'
+      +'<div class="fbar-wrap"><div class="fbar" style="width:'+Math.min(pv,100)+'%;background:'+fd[2]+'"></div></div>'
+      +'<div class="fpct">'+pv+'%</div></div>';
   }
-
-  var html = '<div class="d-head" style="border-left:3px solid ' + c.color + '">'
-    + '<div class="dh-icon">' + c.icon + '</div>'
-    + '<div>'
-    + '<div class="dh-name" style="color:' + c.color + '">' + c.name + '</div>'
-    + '<div class="dh-count">' + c.count.toLocaleString() + ' institutions \u00b7 ' + s.top_region + ' most common</div>'
-    + '<div class="dh-desc">' + c.desc + '</div>'
-    + '</div></div>'
-    + '<div class="hv-angle"><div class="hv-angle-label">HV Angle</div><div class="hv-angle-text">' + c.hv_angle + '</div></div>'
-    + '<div class="stat-strip" style="grid-template-columns:repeat(' + statCols + ',1fr)">' + statHtml + '</div>'
-    + '<div class="flags"><div class="flags-title">Distress Indicators</div>' + flagHtml + '</div>'
-    + buildTable(c);
-
-  document.getElementById('detail').innerHTML = html;
+  var html='<div class="d-head" style="border-left:3px solid '+c.color+'">'
+    +'<div class="dh-icon">'+c.icon+'</div>'
+    +'<div><div class="dh-name" style="color:'+c.color+'">'+c.name+'</div>'
+    +'<div class="dh-count">'+c.count.toLocaleString()+' institutions \u00b7 '+s.top_region+' most common</div>'
+    +'<div class="dh-desc">'+c.desc+'</div></div></div>'
+    +'<div class="hv-angle"><div class="hv-angle-label">HV Angle</div><div class="hv-angle-text">'+c.hv_angle+'</div></div>'
+    +axisHtml
+    +'<div class="stat-strip" style="grid-template-columns:repeat('+statCols+',1fr)">'+statHtml+'</div>'
+    +'<div class="flags"><div class="flags-title">Distress Indicators</div>'+flagHtml+'</div>'
+    +buildTable(c);
+  updateFilterCount(c);
+  document.getElementById('detail').innerHTML=html;
 }
-
-function mkStat(val, label) {
-  return '<div class="stat-cell"><span class="stat-v">' + val + '</span><div class="stat-l">' + label + '</div></div>';
-}
-
-function buildTable(c) {
-  var filtered = filterRows(c.rows);
-  var sorted   = sortRows(filtered);
-  var isIPEDS  = (src === 'ipeds');
-
-  var headers = isIPEDS
-    ? [['distress','Distress'],['name','Institution'],['enrollment','Enroll'],
-       ['revenue','Rev ($K)'],['acres','Acres'],['closure_risk','Closure Risk']]
-    : [['distress','Distress'],['name','Institution'],['revenue','Rev ($K)'],
-       ['acres','Acres'],['type','Type']];
-
-  var thead = '';
-  for (var hi = 0; hi < headers.length; hi++) {
-    var h = headers[hi];
-    var arrow = (sortCol === h[0]) ? (sortAsc ? ' \u2191' : ' \u2193') : '';
-    thead += '<th data-col="' + h[0] + '">' + h[1] + arrow + '</th>';
+function mkStat(val,label){return '<div class="stat-cell"><span class="stat-v">'+val+'</span><div class="stat-l">'+label+'</div></div>';}
+function buildTable(c){
+  var filtered=filterRows(c.rows),sorted=sortRows(filtered),isIPEDS=(src==='ipeds');
+  var headers=isIPEDS
+    ?[['distress','Distress'],['name','Institution'],['enrollment','Enroll'],['revenue','Rev($K)'],['acres','Acres'],['closure_risk','Risk'],['env_score','Env']]
+    :[['distress','Distress'],['name','Institution'],['revenue','Rev($K)'],['acres','Acres'],['env_score','Env'],['type','Type']];
+  var thead='';
+  for(var hi=0;hi<headers.length;hi++){
+    var h=headers[hi],arrow=(sortCol===h[0])?(sortAsc?' \u2191':' \u2193'):'';
+    thead+='<th data-col="'+h[0]+'">'+h[1]+arrow+'</th>';
   }
-
-  var tbody = '';
-  var limit = Math.min(sorted.length, 200);
-  for (var ri = 0; ri < limit; ri++) {
-    var r = sorted[ri];
-    var dc = (r.category || '').toLowerCase().replace(/ /g, '');
-    var dpill = '<span class="dp d-' + dc + '">' + (r.distress || 0).toFixed(0) + ' ' + (r.category || '') + '</span>';
-    var tshort = (r.type || '').replace('Private Non-Profit | ','NP ').replace('Private For-Profit | ','FP ').replace('Public | ','Pub ');
-    var nameCell = '<td class="td-name">' + esc(r.name) + '<small>' + esc(r.city) + ', ' + esc(r.state) + '</small></td>';
-    var tds = '<td>' + dpill + '</td>' + nameCell;
-    if (isIPEDS) {
-      tds += '<td>' + (r.enrollment != null ? r.enrollment.toLocaleString() : '\u2014') + '</td>';
-      tds += '<td>' + (r.revenue != null ? '$' + r.revenue.toLocaleString() + 'K' : '\u2014') + '</td>';
-      tds += '<td>' + (r.acres != null ? r.acres : '\u2014') + '</td>';
-      tds += '<td>' + (r.closure_risk != null ? (r.closure_risk * 100).toFixed(1) + '%' : '\u2014') + '</td>';
-    } else {
-      tds += '<td>' + (r.revenue != null ? '$' + r.revenue.toLocaleString() + 'K' : '\u2014') + '</td>';
-      tds += '<td>' + (r.acres != null ? r.acres : '\u2014') + '</td>';
-      tds += '<td style="font-size:9px;color:var(--text2)">' + esc(tshort) + '</td>';
+  var tbody='',limit=Math.min(sorted.length,200);
+  for(var ri=0;ri<limit;ri++){
+    var r=sorted[ri];
+    var dc=(r.category||'').toLowerCase().replace(/ /g,'');
+    var dpill='<span class="dp d-'+dc+'">'+(r.distress||0).toFixed(0)+' '+(r.category||'')+'</span>';
+    var tshort=(r.type||'').replace('Private Non-Profit | ','NP ').replace('Private For-Profit | ','FP ').replace('Public | ','Pub ');
+    var envPill=r.env_score!=null?('<span class="env-pill" style="background:'+envColor(r.env_score)+'22;color:'+envColor(r.env_score)+'">'+r.env_score+'</span>'):'\u2014';
+    var nameCell='<td class="td-name">'+esc(r.name)+'<small>'+esc(r.city)+', '+esc(r.state)+'</small></td>';
+    var tds='<td>'+dpill+'</td>'+nameCell;
+    if(isIPEDS){
+      tds+='<td>'+(r.enrollment!=null?r.enrollment.toLocaleString():'\u2014')+'</td>';
+      tds+='<td>'+(r.revenue!=null?'$'+r.revenue.toLocaleString()+'K':'\u2014')+'</td>';
+      tds+='<td>'+(r.acres!=null?r.acres:'\u2014')+'</td>';
+      tds+='<td>'+(r.closure_risk!=null?(r.closure_risk*100).toFixed(1)+'%':'\u2014')+'</td>';
+      tds+='<td>'+envPill+'</td>';
+    }else{
+      tds+='<td>'+(r.revenue!=null?'$'+r.revenue.toLocaleString()+'K':'\u2014')+'</td>';
+      tds+='<td>'+(r.acres!=null?r.acres:'\u2014')+'</td>';
+      tds+='<td>'+envPill+'</td>';
+      tds+='<td style="font-size:9px;color:var(--text2)">'+esc(tshort)+'</td>';
     }
-    tbody += '<tr>' + tds + '</tr>';
+    tbody+='<tr>'+tds+'</tr>';
   }
-
   return '<div class="tbar">'
-    + '<input class="tsearch" placeholder="Search\u2026" oninput="onSearch(this.value)" value="' + esc(searchQ) + '">'
-    + '<span class="tcount">' + filtered.length.toLocaleString() + ' shown</span>'
-    + '<button class="export-btn" onclick="doExport()">\u2193 CSV</button>'
-    + '</div>'
-    + '<div class="twrap"><table><thead><tr>' + thead + '</tr></thead><tbody>' + tbody + '</tbody></table></div>';
+    +'<input class="tsearch" placeholder="Search\u2026" oninput="onSearch(this.value)" value="'+esc(searchQ)+'">'
+    +'<span class="tcount">'+filtered.length.toLocaleString()+' shown</span>'
+    +'<button class="export-btn" onclick="doExport()">\u2193 CSV</button>'
+    +'</div>'
+    +'<div class="twrap"><table><thead><tr>'+thead+'</tr></thead><tbody>'+tbody+'</tbody></table></div>';
 }
-
-function filterRows(rows) {
-  if (!searchQ) return rows;
-  var lq = searchQ.toLowerCase();
-  var out = [];
-  for (var i = 0; i < rows.length; i++) {
-    var r = rows[i];
-    if ((r.name||'').toLowerCase().indexOf(lq) >= 0 ||
-        (r.state||'').toLowerCase().indexOf(lq) >= 0 ||
-        (r.city||'').toLowerCase().indexOf(lq) >= 0) out.push(r);
+function filterRows(rows){
+  var lq=searchQ.toLowerCase();
+  var out=[];
+  for(var i=0;i<rows.length;i++){
+    var r=rows[i];
+    if(lq && (r.name||'').toLowerCase().indexOf(lq)<0 && (r.state||'').toLowerCase().indexOf(lq)<0 && (r.city||'').toLowerCase().indexOf(lq)<0) continue;
+    if(filterType && (r.type||'').indexOf(filterType)<0) continue;
+    if(filterAcreage){
+      if(filterAcreage==='any' && (r.acres===null||r.acres===undefined)) continue;
+      else if(filterAcreage!=='any' && (r.acres===null||r.acres===undefined||r.acres < parseFloat(filterAcreage))) continue;
+    }
+    out.push(r);
   }
   return out;
 }
-
-function sortRows(rows) {
-  var col = sortCol, asc = sortAsc;
-  return rows.slice().sort(function(a,b) {
-    var av = a[col], bv = b[col];
-    if (av == null && bv == null) return 0;
-    if (av == null) return 1; if (bv == null) return -1;
-    if (typeof av === 'string') av = av.toLowerCase();
-    if (typeof bv === 'string') bv = bv.toLowerCase();
-    var cmp = av < bv ? -1 : av > bv ? 1 : 0;
-    return asc ? cmp : -cmp;
+function sortRows(rows){
+  var col=sortCol,asc=sortAsc;
+  return rows.slice().sort(function(a,b){
+    var av=a[col],bv=b[col];
+    if(av==null&&bv==null)return 0;if(av==null)return 1;if(bv==null)return -1;
+    if(typeof av==='string')av=av.toLowerCase();if(typeof bv==='string')bv=bv.toLowerCase();
+    var cmp=av<bv?-1:av>bv?1:0;return asc?cmp:-cmp;
   });
 }
-
-function setSort(col) {
-  if (sortCol === col) sortAsc = !sortAsc; else { sortCol = col; sortAsc = false; }
-  var cl = src === 'ipeds' ? IPEDS_DATA : HB990_DATA;
-  for (var i = 0; i < cl.length; i++) {
-    if (cl[i].id === activeId) { renderDetail(cl[i]); break; }
+function setSort(col){
+  if(sortCol===col)sortAsc=!sortAsc;else{sortCol=col;sortAsc=false;}
+  var cl=getClusters();for(var i=0;i<cl.length;i++){if(cl[i].id===activeId){renderDetail(cl[i]);break;}}
+}
+function onSearch(val){
+  searchQ=val;
+  var cl=getClusters();for(var i=0;i<cl.length;i++){if(cl[i].id===activeId){renderDetail(cl[i]);break;}}
+}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function updateFilterCount(c){
+  if(!c) return;
+  var filtered=filterRows(c.rows);
+  var total=c.rows.length;
+  var el=document.getElementById('filterCount');
+  if(el){
+    if(filtered.length===total) el.textContent='';
+    else el.textContent=filtered.length.toLocaleString()+' of '+total.toLocaleString()+' shown';
   }
 }
-
-function onSearch(val) {
-  searchQ = val;
-  var cl = src === 'ipeds' ? IPEDS_DATA : HB990_DATA;
-  for (var i = 0; i < cl.length; i++) {
-    if (cl[i].id === activeId) { renderDetail(cl[i]); break; }
+function applyFilters(){
+  var cl=getClusters(),c=null;
+  for(var i=0;i<cl.length;i++){if(cl[i].id===activeId){c=cl[i];break;}}
+  if(c) renderDetail(c);
+}
+function doExport(){
+  var cl=getClusters(),c=null;
+  for(var i=0;i<cl.length;i++){if(cl[i].id===activeId){c=cl[i];break;}}
+  if(!c)return;
+  var rows=filterRows(c.rows);
+  var cols=src==='ipeds'
+    ?['name','state','city','type','distress','category','enrollment','revenue','acres','closure_risk','env_score','risk_tier','urbanization']
+    :['name','state','city','type','distress','category','revenue','acres','env_score'];
+  var csvLines=[cols.join(',')];
+  for(var ei=0;ei<rows.length;ei++){
+    csvLines.push(cols.map(function(col){return'"'+String(rows[ei][col]!=null?rows[ei][col]:'').replace(/"/g,'""')+'"';}).join(','));
   }
-}
-
-function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function doExport() {
-  var cl = src === 'ipeds' ? IPEDS_DATA : HB990_DATA;
-  var c = null;
-  for (var i = 0; i < cl.length; i++) { if (cl[i].id === activeId) { c = cl[i]; break; } }
-  if (!c) return;
-  var rows = filterRows(c.rows);
-  var cols = src === 'ipeds'
-    ? ['name','state','city','type','distress','category','enrollment','revenue','acres','closure_risk','risk_tier','urbanization']
-    : ['name','state','city','type','distress','category','revenue','acres'];
-  var csvStr = cols.join(',') + '\n' + rows.map(function(r) {
-    return cols.map(function(col) {
-      return '"' + String(r[col] != null ? r[col] : '').replace(/"/g,'""') + '"';
-    }).join(',');
-  }).join('\n');
-  var blob = new Blob([csvStr], {type:'text/csv'});
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'hb_cluster_' + c.name.replace(/[^a-z0-9]+/g,'_').toLowerCase() + '.csv';
+  var blob=new Blob([csvLines.join(String.fromCharCode(10))],{type:'text/csv'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='hb_cluster_'+c.name.replace(/[^a-z0-9]+/g,'_').toLowerCase()+'.csv';
   a.click();
 }
-
-// ── Event wiring ──────────────────────────────────────────────────────────
-document.getElementById('tabIPEDS').addEventListener('click', function() {
-  src = 'ipeds'; activeId = null; searchQ = '';
-  document.querySelectorAll('.s-tab').forEach(function(t) { t.classList.remove('active'); });
-  this.classList.add('active');
-  document.getElementById('segBar').style.display = 'flex';
-  renderCards();
-  document.getElementById('detail').innerHTML = '<div class="d-empty"><div class="d-empty-arrow">\u2190</div><div class="d-empty-title">Select a cluster</div><div class="d-empty-sub">Click any card to explore its institutions</div></div>';
+document.getElementById('tabIPEDS').addEventListener('click',function(){
+  filterType='';filterAcreage='';
+  var fs=document.getElementById('filterType');if(fs)fs.value='';
+  var fa=document.getElementById('filterAcreage');if(fa)fa.value='';
+  src='ipeds';activeId=null;searchQ='';
+  document.querySelectorAll('.s-tab').forEach(function(t){t.classList.remove('active');});
+  this.classList.add('active');renderCards();
+  document.getElementById('detail').innerHTML='<div class="d-empty"><div class="d-empty-arrow">\u2190</div><div class="d-empty-title">Select a cluster</div><div class="d-empty-sub">Click any card to explore its institutions</div></div>';
 });
-
-document.getElementById('tab990').addEventListener('click', function() {
-  src = '990'; activeId = null; searchQ = '';
-  document.querySelectorAll('.s-tab').forEach(function(t) { t.classList.remove('active'); });
-  this.classList.add('active');
-  document.getElementById('segBar').style.display = 'none';
-  renderCards();
-  document.getElementById('detail').innerHTML = '<div class="d-empty"><div class="d-empty-arrow">\u2190</div><div class="d-empty-title">Select a cluster</div><div class="d-empty-sub">Click any card to explore its institutions</div></div>';
+document.getElementById('tab990').addEventListener('click',function(){
+  filterType='';filterAcreage='';
+  var fs=document.getElementById('filterType');if(fs)fs.value='';
+  var fa=document.getElementById('filterAcreage');if(fa)fa.value='';
+  src='990';activeId=null;searchQ='';
+  document.querySelectorAll('.s-tab').forEach(function(t){t.classList.remove('active');});
+  this.classList.add('active');renderCards();
+  document.getElementById('detail').innerHTML='<div class="d-empty"><div class="d-empty-arrow">\u2190</div><div class="d-empty-title">Select a cluster</div><div class="d-empty-sub">Click any card to explore its institutions</div></div>';
 });
-
-document.getElementById('segBar').addEventListener('click', function(e) {
-  var btn = e.target.closest('[data-seg]');
-  if (!btn) return;
-  seg = btn.getAttribute('data-seg');
-  activeId = null;
-  document.querySelectorAll('.seg-btn').forEach(function(b) { b.classList.remove('active'); });
-  btn.classList.add('active');
-  renderCards();
-  document.getElementById('detail').innerHTML = '<div class="d-empty"><div class="d-empty-arrow">\u2190</div><div class="d-empty-title">Select a cluster</div><div class="d-empty-sub">Click any card to explore its institutions</div></div>';
+document.getElementById('cards').addEventListener('click',function(e){
+  var card=e.target.closest('[data-cid]');
+  if(card)selectCluster(parseInt(card.getAttribute('data-cid'),10));
 });
-
-document.getElementById('cards').addEventListener('click', function(e) {
-  var card = e.target.closest('[data-cid]');
-  if (card) selectCluster(parseInt(card.getAttribute('data-cid'), 10));
+document.getElementById('detail').addEventListener('click',function(e){
+  var th=e.target.closest('th[data-col]');
+  if(th)setSort(th.getAttribute('data-col'));
 });
-
-document.getElementById('detail').addEventListener('click', function(e) {
-  var th = e.target.closest('th[data-col]');
-  if (th) setSort(th.getAttribute('data-col'));
+document.getElementById('methToggle').addEventListener('click',function(){
+  document.getElementById('methBody').classList.toggle('open');
+  document.getElementById('methArrow').classList.toggle('open');
 });
-
-document.getElementById('methToggle').addEventListener('click', function() {
-  var body  = document.getElementById('methBody');
-  var arrow = document.getElementById('methArrow');
-  body.classList.toggle('open');
-  arrow.classList.toggle('open');
+document.getElementById('filterType').addEventListener('change',function(){
+  filterType=this.value; applyFilters();
 });
-
+document.getElementById('filterAcreage').addEventListener('change',function(){
+  filterAcreage=this.value; applyFilters();
+});
+// Hide filter bar on 990 tab since those rows have less type/acreage data
+document.getElementById('tabIPEDS').addEventListener('click',function(){},true);
 renderCards();
 </script>
 </body>
-</html>"""
+</html>""")
 
+    return ''.join(parts)
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def main():
-    parser = argparse.ArgumentParser(description='Hummingbird Cluster Engine v2')
-    parser.add_argument('--master',    default=DEFAULT_MASTER)
-    parser.add_argument('--osm',       default=DEFAULT_OSM)
-    parser.add_argument('--out-html',  default=DEFAULT_OUT_HTML)
-    parser.add_argument('--out-csv',   default=DEFAULT_OUT_CSV)
-    parser.add_argument('--k-public',  type=int, default=K_PUBLIC)
-    parser.add_argument('--k-pnp',     type=int, default=K_PNP)
-    parser.add_argument('--k-pfp',     type=int, default=K_PFP)
-    parser.add_argument('--k-990',     type=int, default=K_HB990)
+    parser = argparse.ArgumentParser(description='Hummingbird Cluster Engine v3')
+    parser.add_argument('--master',   default=DEFAULT_MASTER)
+    parser.add_argument('--osm',      default=DEFAULT_OSM)
+    parser.add_argument('--out-html', default=DEFAULT_OUT_HTML)
+    parser.add_argument('--out-csv',  default=DEFAULT_OUT_CSV)
+    parser.add_argument('--k-ipeds',  type=int, default=K_IPEDS)
+    parser.add_argument('--k-990',    type=int, default=K_HB990)
     args = parser.parse_args()
 
-    try:
-        import sklearn
+    try: import sklearn
     except ImportError:
         print("ERROR: scikit-learn not installed. Run: pip install scikit-learn")
         sys.exit(1)
 
-    # Load master
+    scorer = load_scorer()
+    if scorer: print("  OSM scorer loaded")
+    else:      print("  Warning: osm_scorer.py not found — env scores will be None")
+
     print(f"Loading {args.master}...")
     csv.field_size_limit(100 * 1024 * 1024)
     rows = []
     with open(args.master, newline='', encoding='utf-8', errors='replace') as f:
-        for row in csv.DictReader(f):
-            rows.append(row)
+        for row in csv.DictReader(f): rows.append(row)
     print(f"  {len(rows):,} rows loaded")
 
-    # Load OSM
+    # Build name→urbanization lookup for context-aware scoring
+    _urb_lookup = {r.get('institution_name',''): r.get('urbanization','')
+                   for r in rows if r.get('institution_name')}
+
+    # Load and score OSM data
+    osm_scores = {}
     osm_scraped = 0
     if os.path.exists(args.osm):
-        print(f"Loading OSM from {args.osm}...")
+        print(f"Loading + scoring OSM from {args.osm}...")
         csv.field_size_limit(100 * 1024 * 1024)
-        osm_lookup = {}
         with open(args.osm, newline='', encoding='utf-8', errors='replace') as f:
             for r in csv.DictReader(f):
-                name = r.get('institution_name', '')
-                raw_cats = r.get('osm_env_categories', '').strip()
-                if name and raw_cats and raw_cats.upper() != 'ERROR':
-                    # Parse pipe-separated category groups into individual category names
-                    cats = []
-                    for part in raw_cats.split('|'):
-                        part = part.strip().lower()
-                        for known in OSM_CATS:
-                            if known in part:
-                                cats.append(known)
-                    osm_lookup[name] = list(set(cats))
-                    osm_scraped += 1
-        print(f"  {osm_scraped:,} institutions with OSM data")
-        for row in rows:
-            row['_osm_categories'] = osm_lookup.get(row.get('institution_name', ''), [])
+                name     = r.get('institution_name','').strip()
+                feat_str = r.get('osm_env_features','').strip()
+                queried  = r.get('osm_env_queried_at','').strip()
+                if not name or not queried or feat_str == 'ERROR': continue
+                by_cat = parse_osm_feature_string(feat_str)
+                count  = r.get('osm_env_count', 0)
+                radius = r.get('osm_env_radius_miles', 20)
+                # Look up urbanization from master rows for context penalty
+                # We'll build urb_lookup after loading rows — patch below
+                if scorer:
+                    score_result = scorer.score_osm_environment(
+                        by_cat, feature_count=count, radius_miles=radius,
+                        urbanization=_urb_lookup.get(name)
+                    )
+                else:
+                    score_result = {'score': None, 'context_mult': None}
+                osm_scores[name] = score_result
+                osm_scraped += 1
+        print(f"  {osm_scraped:,} institutions scored")
+        scored = sum(1 for v in osm_scores.values() if v.get('score') is not None)
+        if scored > 0:
+            vals = sorted(v['score'] for v in osm_scores.values() if v.get('score') is not None)
+            print(f"  Score distribution: min={vals[0]:.1f}  med={vals[len(vals)//2]:.1f}  max={vals[-1]:.1f}")
     else:
-        print(f"  OSM file not found at {args.osm} — skipping")
-        for row in rows:
-            row['_osm_categories'] = []
+        print(f"  OSM file not found — env scores will be None")
 
     osm_pct = round(osm_scraped / len(rows) * 100)
-
-    import datetime
     run_date = datetime.datetime.now().strftime('%Y-%m-%d')
 
-    all_ipeds_clusters = []
-    cluster_id_counter = [0]
+    # IPEDS clustering
+    print(f"\nIPEDS clustering (k={args.k_ipeds})...")
+    ipeds_matrix, _, ipeds_idx = extract_ipeds_features(rows, osm_scores)
+    print(f"  {len(ipeds_matrix):,} institutions x {len(ipeds_matrix[0])} features")
+    ipeds_labels, _ = run_kmeans(ipeds_matrix, args.k_ipeds)
 
-    def next_id():
-        cid = cluster_id_counter[0]
-        cluster_id_counter[0] += 1
-        return cid
+    for pos, row_idx in enumerate(ipeds_idx):
+        rows[row_idx]['cluster_ipeds'] = str(ipeds_labels[pos])
 
-    # ── IPEDS by segment ──────────────────────────────────────────────────────
-    for seg_name, type_filter, k, namer in [
-        ('Public',          'public', args.k_public,  name_public_cluster),
-        ('Private NP',      'pnp',    args.k_pnp,     name_pnp_cluster),
-        ('Private FP',      'pfp',    args.k_pfp,     name_pfp_cluster),
-    ]:
-        print(f"\nIPEDS {seg_name} (k={k})...")
-        matrix, feat_names, valid_idx = build_ipeds_segment(rows, type_filter)
-        print(f"  {len(matrix):,} institutions x {len(feat_names)} features")
-        if len(matrix) < k:
-            print(f"  Skipping — fewer institutions than k")
-            continue
+    ipeds_groups = defaultdict(list)
+    for pos, row_idx in enumerate(ipeds_idx):
+        ipeds_groups[ipeds_labels[pos]].append(rows[row_idx])
 
-        labels, _ = run_kmeans(matrix, k)
+    ipeds_clusters = []
+    cid = 0
+    for cid_local in sorted(ipeds_groups.keys()):
+        info = name_ipeds_cluster(ipeds_groups[cid_local], cid, osm_scores)
+        ipeds_clusters.append(info)
+        print(f"  [{cid}] {info['icon']} {info['name']} — {info['count']:,}  urgency={info['stats']['urgency_score']}  land={info['stats']['land_score']}  fit={info['stats']['fit_score']}")
+        cid += 1
 
-        for pos, row_idx in enumerate(valid_idx):
-            rows[row_idx]['cluster_ipeds'] = f"{type_filter}_{labels[pos]}"
+    # Sort by priority then distress
+    ipeds_clusters.sort(key=lambda c: (c['priority'], -c['stats']['median_distress']))
 
-        groups = defaultdict(list)
-        for pos, row_idx in enumerate(valid_idx):
-            groups[labels[pos]].append(rows[row_idx])
-
-        for cid_local in sorted(groups.keys()):
-            crows = groups[cid_local]
-            cid = next_id()
-            info = namer(crows, cid)
-            all_ipeds_clusters.append(info)
-            print(f"  [{cid}] {info['icon']} {info['name']} — {len(crows):,}")
-
-    all_ipeds_clusters.sort(key=lambda c: -c['stats']['median_distress'])
-
-    # ── 990 ───────────────────────────────────────────────────────────────────
-    print(f"\n990 (k={args.k_990})...")
-    hb990_matrix, _, hb990_idx = extract_990_features(rows)
+    # 990 clustering
+    print(f"\n990 clustering (k={args.k_990})...")
+    hb990_matrix, _, hb990_idx = extract_990_features(rows, osm_scores)
     print(f"  {len(hb990_matrix):,} institutions x {len(hb990_matrix[0])} features")
     hb990_labels, _ = run_kmeans(hb990_matrix, args.k_990)
 
@@ -1342,23 +1318,20 @@ def main():
     for pos, row_idx in enumerate(hb990_idx):
         hb990_groups[hb990_labels[pos]].append(rows[row_idx])
 
-    all_990_clusters = []
+    hb990_clusters = []
     for cid_local in sorted(hb990_groups.keys()):
-        crows = hb990_groups[cid_local]
-        cid = next_id()
-        info = name_990_cluster(crows, cid)
-        all_990_clusters.append(info)
-        print(f"  [{cid}] {info['icon']} {info['name']} — {len(crows):,}")
+        info = name_990_cluster(hb990_groups[cid_local], cid, osm_scores)
+        hb990_clusters.append(info)
+        print(f"  [{cid}] {info['icon']} {info['name']} — {info['count']:,}  urgency={info['stats']['urgency_score']}  land={info['stats']['land_score']}  fit={info['stats']['fit_score']}")
+        cid += 1
 
-    all_990_clusters.sort(key=lambda c: -c['stats']['median_distress'])
+    hb990_clusters.sort(key=lambda c: (c['priority'], -c['stats']['median_distress']))
 
-    # ── Write CSV ─────────────────────────────────────────────────────────────
+    # Write CSV
     print(f"\nWriting CSV to {args.out_csv}...")
     fieldnames = list(rows[0].keys())
-    for col in ['cluster_ipeds', 'cluster_990']:
-        if col not in fieldnames:
-            fieldnames.append(col)
-    fieldnames = [f for f in fieldnames if f != '_osm_categories']
+    for col in ['cluster_ipeds','cluster_990']:
+        if col not in fieldnames: fieldnames.append(col)
     os.makedirs(os.path.dirname(args.out_csv), exist_ok=True)
     with open(args.out_csv, 'w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
@@ -1366,26 +1339,19 @@ def main():
         writer.writerows(rows)
     print("  Done.")
 
-    # ── Write HTML ────────────────────────────────────────────────────────────
+    # Write HTML
     print(f"\nGenerating {args.out_html}...")
-    meta = {
-        'run_date': run_date,
-        'osm_scraped': osm_scraped,
-        'osm_pct': osm_pct,
-    }
-    html = build_html(all_ipeds_clusters, all_990_clusters, meta)
+    meta = {'run_date': run_date, 'osm_scraped': osm_scraped, 'osm_pct': osm_pct}
+    html = build_html(ipeds_clusters, hb990_clusters, meta)
     with open(args.out_html, 'w', encoding='utf-8') as f:
         f.write(html)
     print(f"  Done. ({len(html):,} chars)")
 
     print(f"\n\u2713 Complete.")
-    print(f"  IPEDS: {len(all_ipeds_clusters)} clusters across {len([r for r in rows if r.get('data_source')=='IPEDS']):,} institutions")
-    print(f"  990:   {len(all_990_clusters)} clusters across {len([r for r in rows if r.get('data_source')=='Hummingbird_990']):,} institutions")
+    print(f"  IPEDS: {len(ipeds_clusters)} clusters across {len(ipeds_matrix):,} institutions")
+    print(f"  990:   {len(hb990_clusters)} clusters across {len(hb990_matrix):,} institutions")
     print(f"  HTML:  {args.out_html}")
     print(f"  CSV:   {args.out_csv}")
-
-    return all_ipeds_clusters, all_990_clusters
-
 
 if __name__ == '__main__':
     main()
