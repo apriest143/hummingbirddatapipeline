@@ -220,6 +220,12 @@ tr:hover td{background:rgba(255,255,255,.015);}
     </div>
   </div>
 
+  <div class="view-tabs">
+    <div class="view-tab active" id="viewTabClusters">Clusters</div>
+    <div class="view-tab" id="viewTab3D">3D Opportunity Space</div>
+  </div>
+
+  <div id="clustersView">
   <div class="page-eyebrow">Phase II · Machine Learning</div>
   <div class="page-title">Opportunity Clusters</div>
   <div class="page-sub">12,911 institutions segmented across three axes: <b>urgency</b> (distress trajectory), <b>land</b> (physical asset potential), and <b>HV fit</b> (environment quality score). Institution type is a label, not a clustering feature.</div>
@@ -260,13 +266,13 @@ tr:hover td{background:rgba(255,255,255,.015);}
     </div>
   </div><!-- /clustersView -->
 
-  <div id="scatterView">
+  <div id="scatterView" style="display:none">
     <div class="scatter-wrap" style="position:relative">
       <div class="scatter-head">
         <div class="scatter-title">URGENCY × LAND × HV FIT — each dot is one institution</div>
         <div class="scatter-legend" id="scatterLegend"></div>
       </div>
-      <canvas id="scatterCanvas" class="scatter-canvas"></canvas>
+      <canvas id="scatterCanvas" class="scatter-canvas" style="width:100%;height:600px;display:block;"></canvas>
       <div class="scatter-tooltip" id="scatterTooltip"></div>
       <div class="scatter-foot">
         <div class="scatter-hint">Drag to rotate · Scroll to zoom · Hover for details · Grey = OSM not yet scraped</div>
@@ -418,7 +424,8 @@ function project(x, y, z) {
 function drawScene() {
   var canvas = document.getElementById('scatterCanvas');
   if (!canvas) return;
-  var W = canvas.offsetWidth, H = canvas.offsetHeight;
+  var W = canvas.offsetWidth || canvas.parentElement.offsetWidth || 800;
+  var H = 600;
   canvas.width = W; canvas.height = H;
   var ctx = canvas.getContext('2d');
   ctx.fillStyle = '#0f1117';
