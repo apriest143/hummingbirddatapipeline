@@ -355,14 +355,14 @@ document.getElementById('viewTabClusters').addEventListener('click', function() 
   document.getElementById('viewTab3D').classList.remove('active');
 });
 document.getElementById('viewTab3D').addEventListener('click', function() {
-  document.getElementById('clustersView').style.display = 'none';
-  document.getElementById('scatterView').style.display = 'block';
-  document.getElementById('viewTabClusters').classList.remove('active');
-  document.getElementById('viewTab3D').classList.add('active');
-  initScatter();
+  try {
+    document.getElementById('clustersView').style.display = 'none';
+    document.getElementById('scatterView').style.display = 'block';
+    document.getElementById('viewTabClusters').classList.remove('active');
+    document.getElementById('viewTab3D').classList.add('active');
+    initScatter();
+  } catch(err) { console.error('3D tab error:', err); }
 });
-document.getElementById('scatterReset').addEventListener('click', function() { resetCamera(); drawScene(); });
-document.getElementById('btnIPEDS3D').addEventListener('click', function() { scatter3DSrc='ipeds'; buildPoints(); drawScene(); buildLegend(); });
 document.getElementById('btn9903D').addEventListener('click', function() { scatter3DSrc='990'; buildPoints(); drawScene(); buildLegend(); });
 
 // ── 3D Scatter Engine ─────────────────────────────────────────────────────
@@ -375,12 +375,15 @@ var scatterInited = false;
 function initScatter() {
   if (scatterInited) return;
   scatterInited = true;
+  // Force scatterView visible before measuring canvas
+  var sv = document.getElementById('scatterView');
+  if (sv) sv.style.display = 'block';
   buildPoints();
   buildLegend();
   setupScatterEvents();
-  drawScene();
+  // Give layout time to settle then draw
+  setTimeout(function() { drawScene(); }, 50);
 }
-
 function buildPoints() {
   var cl = scatter3DSrc === 'ipeds' ? IPEDS_DATA : HB990_DATA;
   scatterPts = [];
@@ -446,7 +449,7 @@ function project(x, y, z) {
 function drawScene() {
   var canvas = document.getElementById('scatterCanvas');
   if (!canvas) return;
-  var W = canvas.offsetWidth || canvas.parentElement.offsetWidth || 800;
+  var W = Math.max(canvas.offsetWidth || 0, canvas.parentElement ? canvas.parentElement.offsetWidth : 0, 600);
   var H = 600;
   canvas.width = W; canvas.height = H;
   var ctx = canvas.getContext('2d');
