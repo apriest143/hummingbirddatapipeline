@@ -141,6 +141,28 @@ tr:hover td{background:rgba(255,255,255,.015);}
 .filter-btn:hover:not(.active){color:var(--text);border-color:var(--text2);}
 .filter-count{font-family:var(--mono);font-size:10px;color:var(--text2);margin-left:4px;}
 @media(max-width:860px){.layout{grid-template-columns:1fr;}.detail{position:static;}.meth-grid,.meth-axes{grid-template-columns:1fr;}}
+#clustersView{display:block;}
+#scatterView{display:none;}
+.view-tabs{display:flex;gap:6px;margin-bottom:16px;}
+.view-tab{padding:6px 16px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;}
+.view-tab.active{background:rgba(108,92,231,.15);border-color:rgba(108,92,231,.4);color:var(--accent2);}
+.view-tab:hover:not(.active){color:var(--text);}
+.scatter-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.scatter-head{padding:14px 18px;border-bottom:1px solid var(--border);background:var(--surface2);display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.scatter-title{font-family:var(--mono);font-size:11px;color:var(--text2);font-weight:500;}
+.scatter-legend{display:flex;flex-wrap:wrap;gap:8px;flex:1;}
+.scatter-leg-item{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text2);cursor:pointer;}
+.scatter-leg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.scatter-canvas{width:100%;height:600px;display:block;cursor:grab;background:#0f1117;}
+.scatter-canvas:active{cursor:grabbing;}
+.scatter-tooltip{position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:11px;pointer-events:none;display:none;z-index:100;max-width:240px;box-shadow:0 4px 20px rgba(0,0,0,0.4);}
+.scatter-tooltip .tt-name{font-weight:600;margin-bottom:4px;}
+.scatter-tooltip .tt-row{font-family:var(--mono);font-size:9px;color:var(--text2);margin-top:2px;}
+.scatter-foot{padding:8px 18px;border-top:1px solid var(--border);display:flex;gap:16px;align-items:center;flex-wrap:wrap;}
+.scatter-hint{font-size:10px;color:var(--text2);}
+.scatter-controls{display:flex;gap:6px;margin-left:auto;}
+.scatter-ctrl-btn{padding:3px 10px;border-radius:4px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-family:var(--font);font-size:10px;cursor:pointer;}
+.scatter-ctrl-btn:hover{color:var(--text);}
 </style>
 </head>
 <body>
