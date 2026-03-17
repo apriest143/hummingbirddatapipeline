@@ -294,7 +294,7 @@ tr:hover td{background:rgba(255,255,255,.015);}
         <div class="scatter-title">URGENCY × LAND × HV FIT — each dot is one institution</div>
         <div class="scatter-legend" id="scatterLegend"></div>
       </div>
-      <canvas id="scatterCanvas" width="900" height="600" style="width:100%;height:600px;display:block;cursor:grab;background:#0f1117;"></canvas>
+      <canvas id="scatterCanvas" width="900" height="600" style="width:100%;display:block;cursor:grab;background:#0f1117;"></canvas>
       <div class="scatter-tooltip" id="scatterTooltip"></div>
       <div class="scatter-foot">
         <div class="scatter-hint">Drag to rotate · Scroll to zoom · Hover for details · Grey = OSM not yet scraped</div>
@@ -349,19 +349,17 @@ function selectCluster(cid){
 
 // ── View tab switching ────────────────────────────────────────────────────
 document.getElementById('viewTabClusters').addEventListener('click', function() {
-  document.getElementById('clustersView').style.display = 'block';
-  document.getElementById('scatterView').style.display = 'none';
+  document.getElementById('clustersView').style.cssText = 'display:block !important';
+  document.getElementById('scatterView').style.cssText = 'display:none !important';
   document.getElementById('viewTabClusters').classList.add('active');
   document.getElementById('viewTab3D').classList.remove('active');
 });
 document.getElementById('viewTab3D').addEventListener('click', function() {
-  try {
-    document.getElementById('clustersView').style.display = 'none';
-    document.getElementById('scatterView').style.display = 'block';
-    document.getElementById('viewTabClusters').classList.remove('active');
-    document.getElementById('viewTab3D').classList.add('active');
-    initScatter();
-  } catch(err) { console.error('3D tab error:', err); }
+  document.getElementById('clustersView').style.cssText = 'display:none !important';
+  document.getElementById('scatterView').style.cssText = 'display:block !important';
+  document.getElementById('viewTabClusters').classList.remove('active');
+  document.getElementById('viewTab3D').classList.add('active');
+  setTimeout(initScatter, 100);
 });
 document.getElementById('btn9903D').addEventListener('click', function() { scatter3DSrc='990'; buildPoints(); drawScene(); buildLegend(); });
 
@@ -449,7 +447,7 @@ function project(x, y, z) {
 function drawScene() {
   var canvas = document.getElementById('scatterCanvas');
   if (!canvas) return;
-  var W = canvas.width || 900;
+  var W = Math.max(canvas.offsetWidth || 0, canvas.parentElement ? canvas.parentElement.offsetWidth : 0, 600);
   var H = 600;
   canvas.width = W; canvas.height = H;
   var ctx = canvas.getContext('2d');
@@ -797,7 +795,6 @@ document.getElementById('filterAcreage').addEventListener('change',function(){
   filterAcreage=this.value; applyFilters();
 });
 // Hide filter bar on 990 tab since those rows have less type/acreage data
-document.getElementById('tabIPEDS').addEventListener('click',function(){},true);
 renderCards();
 </script>
 </body>
