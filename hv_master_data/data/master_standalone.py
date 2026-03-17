@@ -21,6 +21,24 @@ import json
 import os
 import re
 import csv
+import sys as _sys
+# OSM environment scorer — shared with clusters.py
+_SCORER_PATHS = [
+    os.path.join(os.path.dirname(__file__), 'osm_scorer.py'),
+    os.path.join(os.path.dirname(__file__), '..', 'data', 'osm_scorer.py'),
+    'osm_scorer.py',
+    'hv_master_data/data/osm_scorer.py',
+]
+_osm_scorer = None
+for _p in _SCORER_PATHS:
+    if os.path.exists(_p):
+        import importlib.util as _ilu
+        _spec = _ilu.spec_from_file_location('osm_scorer', _p)
+        _osm_scorer = _ilu.module_from_spec(_spec)
+        _spec.loader.exec_module(_osm_scorer)
+        break
+if _osm_scorer is None:
+    print("  Warning: osm_scorer.py not found — environment scores will be skipped")
 
 # =============================================================================
 # CONFIGURATION
@@ -233,10 +251,12 @@ def parse_osm_feature_string(feat_str):
     return by_category
 
 
-def build_osm_lookup(osm_path):
+def build_osm_lookup(osm_path, urb_lookup=None):
     """
     Read osm_land_results.csv and return a dict keyed by institution_name.
     Only rows with a valid timestamp (i.e. not ERROR, not incomplete) are included.
+    urb_lookup: optional dict of {institution_name: urbanization_string} used to
+    apply urban context penalty to environment scores.
     """
     if not os.path.exists(osm_path):
         print(f"  OSM file not found: {osm_path} — skipping land data")
@@ -257,12 +277,24 @@ def build_osm_lookup(osm_path):
             cats_raw = [c.strip() for c in row.get('osm_env_categories', '').split('|') if c.strip()]
             by_cat   = parse_osm_feature_string(feat_str)
 
+            _count  = int(str(row.get('osm_env_count', '0') or '0').strip()) if str(row.get('osm_env_count', '0') or '0').strip().lstrip('-').isdigit() else 0
+            _radius = row.get('osm_env_radius_miles', '20')
+            _urb = (urb_lookup or {}).get(name)
+            _env_score = _osm_scorer.score_osm_environment(
+                by_cat, feature_count=_count, radius_miles=_radius,
+                urbanization=_urb
+            ) if _osm_scorer else {'score': None, 'feature_score': None,
+                                   'category_score': None, 'density_bonus': None,
+                                   'radius_bonus': None, 'context_mult': None,
+                                   'breakdown': [], 'top_features': [],
+                                   'has_osm_data': bool(by_cat)}
             lookup[name] = {
                 'categories':  cats_raw,
-                'count':       int(row.get('osm_env_count', '0') or '0'),
-                'radius_miles': row.get('osm_env_radius_miles', '20'),
+                'count':       _count,
+                'radius_miles': _radius,
                 'queried_at':  queried,
                 'by_category': by_cat,
+                'env_score':   _env_score,
             }
 
     return lookup
@@ -333,7 +365,10 @@ def main():
 
     # ── Load OSM land data ───────────────────────────────────────────────────
     print(f'\nLoading OSM land data: {OSM_FILE}')
-    osm_lookup = build_osm_lookup(OSM_FILE)
+    # Build name→urbanization lookup so scorer can apply urban context penalty
+    urb_lookup = {r['institution_name']: r.get('urbanization','')
+                  for r in records if r.get('institution_name')}
+    osm_lookup = build_osm_lookup(OSM_FILE, urb_lookup=urb_lookup)
     osm_json   = json.dumps(osm_lookup, separators=(',', ':'), ensure_ascii=False)
     osm_mb     = len(osm_json) / (1024 * 1024)
     print(f'  {len(osm_lookup):,} institutions with land data  ({osm_mb:.1f} MB)')
@@ -419,6 +454,21 @@ def main():
         print(f'\n  ℹ clusters.py not found — skipping cluster generation')
         print(f'    Place clusters.py at: {clusters_script}')
 
+
+    # ── Run summary generator ────────────────────────────────────────────────────────────────────
+    summary_script = os.path.join(os.path.dirname(__file__), 'summary_generator.py')
+    if not os.path.exists(summary_script):
+        summary_script = 'hv_master_data/data/summary_generator.py'
+    if os.path.exists(summary_script):
+        print('  Running summary generator...')
+        import subprocess as _sp
+        _sr = _sp.run([sys.executable, summary_script,
+                       '--master', MASTER_FILE, '--out', 'summary.html'],
+                      capture_output=False)
+        if _sr.returncode != 0:
+            print('  ⚠ Summary generator failed — skipping (summary.html not updated)')
+    else:
+        print(f'\n  ℹ summary_generator.py not found — skipping summary generation')
     print('=' * 70)
 
 
