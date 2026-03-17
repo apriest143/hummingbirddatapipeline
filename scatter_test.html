@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+body { background:#0f1117; color:#e2e4e9; font-family:sans-serif; margin:20px; }
+.btn { padding:8px 16px; border-radius:6px; background:#1e2028; border:1px solid #2a2d37;
+       color:#a29bfe; font-size:12px; font-weight:600; cursor:pointer; margin-right:8px; }
+#log { background:#1e2028; border:1px solid #2a2d37; border-radius:6px; 
+       padding:12px; margin:12px 0; font-family:monospace; font-size:11px; 
+       min-height:60px; color:#00b894; }
+#canvasWrap { background:#181a20; border:1px solid #2a2d37; border-radius:8px; 
+              padding:4px; margin-top:12px; }
+canvas { display:block; background:#0f1117; }
+</style>
+</head>
+<body>
+<h2 style="color:#a29bfe">Canvas Test</h2>
+<button class="btn" onclick="runTest()">Run Canvas Test</button>
+<button class="btn" onclick="runTest3D()">Run 3D Dots Test</button>
+<div id="log">Click a button above...</div>
+<div id="canvasWrap">
+  <canvas id="testCanvas" width="800" height="400"></canvas>
+</div>
+
+<script>
+function log(msg) {
+  document.getElementById('log').innerHTML += msg + '<br>';
+}
+
+function runTest() {
+  document.getElementById('log').innerHTML = '';
+  var canvas = document.getElementById('testCanvas');
+  log('Canvas element: ' + (canvas ? 'found' : 'NOT FOUND'));
+  log('Canvas offsetWidth: ' + canvas.offsetWidth);
+  log('Canvas offsetHeight: ' + canvas.offsetHeight);
+  log('Canvas width attr: ' + canvas.width);
+  log('Canvas height attr: ' + canvas.height);
+  
+  var ctx = canvas.getContext('2d');
+  log('Context: ' + (ctx ? 'ok' : 'FAILED'));
+  
+  ctx.fillStyle = '#0f1117';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#00b894';
+  ctx.fillRect(50, 50, 200, 100);
+  ctx.fillStyle = '#e2e4e9';
+  ctx.font = '16px monospace';
+  ctx.fillText('Canvas is working!', 60, 110);
+  log('Draw complete — you should see a green rectangle above');
+}
+
+function runTest3D() {
+  document.getElementById('log').innerHTML = '';
+  var canvas = document.getElementById('testCanvas');
+  var W = canvas.width, H = canvas.height;
+  var ctx = canvas.getContext('2d');
+  
+  ctx.fillStyle = '#0f1117';
+  ctx.fillRect(0, 0, W, H);
+  
+  var colors = ['#00b894','#ff4757','#6c5ce7','#ffa502','#74b9ff','#ff6b35'];
+  var count = 0;
+  for (var i = 0; i < 500; i++) {
+    var x = Math.random() * W;
+    var y = Math.random() * H;
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+    ctx.globalAlpha = 0.8;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    count++;
+  }
+  
+  ctx.fillStyle = '#a29bfe';
+  ctx.font = '14px monospace';
+  ctx.fillText(count + ' dots drawn on ' + W + 'x' + H + ' canvas', 20, 30);
+  log('Drew ' + count + ' dots — check canvas above');
+}
+</script>
+</body>
+</html>
