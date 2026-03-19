@@ -1,8 +1,8 @@
 """
-summary_generator.py - Hummingbird Market Summary Dashboard
+summary_generator.py — Hummingbird Market Summary Dashboard
 ============================================================
-Generates summary.html from master CSV. Called by master_standalone.py
-or run directly: python hv_master_data/data/summary_generator.py
+Generates summary.html. Called by master_standalone.py or run directly:
+    python hv_master_data/data/summary_generator.py
 """
 import os, sys, csv, json, math, datetime, argparse
 from collections import Counter, defaultdict
@@ -18,159 +18,472 @@ def fv(r,c):
 def flag(r,c): return str(r.get(c,'')).strip().lower() in ('1','true','yes','1.0')
 def med(vals):
     vals=[v for v in vals if v is not None]
-    if not vals: return 0
+    if not vals: return None
     vals.sort(); return vals[len(vals)//2]
+def avg(vals):
+    vals=[v for v in vals if v is not None]
+    return sum(vals)/len(vals) if vals else None
 def pct(n,d): return round(n/max(d,1)*100,1)
 def get_acres(r): return fv(r,'acreage_primary') or fv(r,'scraper_acres') or fv(r,'osm_acres')
+def fmt_m(v): return f"${round(v/1e6,1)}M" if v else "—"
+def fmt_b(v): return f"${round(v/1e9,1)}B" if v else "—"
+def fmt_n(v, decimals=1): return f"{round(v,decimals):,}" if v is not None else "—"
+
 
 def compute_stats(rows):
-    ipeds=[r for r in rows if r.get('data_source')=='IPEDS']
-    hb990=[r for r in rows if r.get('data_source')=='Hummingbird_990']
-    def type_stats_ipeds():
-        by_type=defaultdict(list)
-        for r in ipeds: by_type[r.get('institution_type','Unknown')].append(r)
-        out={}
-        for t,rs in sorted(by_type.items(),key=lambda x:-len(x[1])):
-            al=[get_acres(r) for r in rs if get_acres(r)]
-            out[t]={'count':len(rs),'pct':pct(len(rs),len(ipeds)),'total_acres':round(sum(al)),'w_acres':len(al),
-                    'med_distress':round(med([fv(r,'distress_score') for r in rs if fv(r,'distress_score')]),1),
-                    'med_rev_m':round(med([fv(r,'revenue_2024') for r in rs if fv(r,'revenue_2024')])/1e6,1),
-                    'med_enr':round(med([fv(r,'enrollment_2024') for r in rs if fv(r,'enrollment_2024')])),
-                    'crit_high':sum(1 for r in rs if r.get('distress_category') in ('Critical','High'))}
-        return out
-    def type_stats_990():
-        by_type=defaultdict(list)
-        for r in hb990: by_type[r.get('institution_type','Unknown')].append(r)
-        out={}
-        for t,rs in sorted(by_type.items(),key=lambda x:-len(x[1])):
-            al=[get_acres(r) for r in rs if get_acres(r)]
-            out[t]={'count':len(rs),'pct':pct(len(rs),len(hb990)),'total_acres':round(sum(al)),'w_acres':len(al),
-                    'med_rev_k':round(med([fv(r,'revenue_2024') for r in rs if fv(r,'revenue_2024')])/1000),
-                    'pct_op_loss':round(pct(sum(1 for r in rs if flag(r,'flag_990_operating_loss')),len(rs))),
-                    'pct_neg_ast':round(pct(sum(1 for r in rs if flag(r,'flag_990_negative_net_assets')),len(rs))),
-                    'pct_hi_debt':round(pct(sum(1 for r in rs if flag(r,'flag_990_high_debt')),len(rs)))}
-        return out
-    ipeds_crit=[r for r in ipeds if r.get('distress_category') in ('Critical','High')]
-    hb990_crit=[r for r in hb990 if r.get('distress_category') in ('Critical','High')]
-    ia=sum(get_acres(r) for r in ipeds if get_acres(r))
-    ha=sum(get_acres(r) for r in hb990 if get_acres(r))
-    ida=sum(get_acres(r) for r in ipeds_crit if get_acres(r))
+    ipeds = [r for r in rows if r.get('data_source')=='IPEDS']
+    hb990 = [r for r in rows if r.get('data_source')=='Hummingbird_990']
+
+    # ── IPEDS distress breakdown ──────────────────────────────────────────
+    dist_order = ['Critical','High','Moderate','Low','Healthy']
+    ipeds_dist = []
+    for cat in dist_order:
+        rs = [r for r in ipeds if r.get('distress_category')==cat]
+        if not rs: continue
+        ipeds_dist.append({
+            'cat': cat, 'count': len(rs),
+            'pct': pct(len(rs), len(ipeds)),
+            'avg_distress': round(avg([fv(r,'distress_score') for r in rs]) or 0, 1),
+            'avg_revenue_m': round((avg([fv(r,'revenue_2024') for r in rs]) or 0)/1e6, 1),
+            'avg_enroll': round(avg([fv(r,'enrollment_2024') for r in rs]) or 0),
+            'avg_cr': round(avg([fv(r,'closure_risk_score') for r in rs]) or 0, 3),
+        })
+
+    # ── IPEDS ML risk tiers ───────────────────────────────────────────────
+    risk_order = ['Critical','High','Elevated','Moderate','Low']
+    ipeds_risk = []
+    for tier in risk_order:
+        rs = [r for r in ipeds if r.get('risk_tier')==tier]
+        if not rs: continue
+        ipeds_risk.append({
+            'tier': tier, 'count': len(rs),
+            'pct': pct(len(rs), len(ipeds)),
+            'avg_cr': round(avg([fv(r,'closure_risk_score') for r in rs]) or 0, 3),
+            'avg_distress': round(avg([fv(r,'distress_score') for r in rs]) or 0, 1),
+            'avg_revenue_m': round((avg([fv(r,'revenue_2024') for r in rs]) or 0)/1e6, 1),
+            'avg_enroll': round(avg([fv(r,'enrollment_2024') for r in rs]) or 0),
+        })
+    no_ml = sum(1 for r in ipeds if not r.get('risk_tier','').strip())
+    if no_ml:
+        ipeds_risk.append({'tier':'No ML Score','count':no_ml,'pct':pct(no_ml,len(ipeds)),
+                           'avg_cr':None,'avg_distress':None,'avg_revenue_m':None,'avg_enroll':None})
+
+    # ── IPEDS by type ─────────────────────────────────────────────────────
+    by_type_ipeds = defaultdict(list)
+    for r in ipeds: by_type_ipeds[r.get('institution_type','Unknown')].append(r)
+    ipeds_types = []
+    for t, rs in sorted(by_type_ipeds.items(), key=lambda x:-len(x[1])):
+        if len(rs) < 2: continue
+        acres_list = [get_acres(r) for r in rs if get_acres(r)]
+        ipeds_types.append({
+            'type': t, 'count': len(rs),
+            'pct': pct(len(rs), len(ipeds)),
+            'total_assets_b': round(sum(fv(r,'assets_2024') for r in rs if fv(r,'assets_2024'))/1e9, 1),
+            'total_liab_b': round(sum(fv(r,'liabilities_2024') for r in rs if fv(r,'liabilities_2024'))/1e9, 1),
+            'total_rev_b': round(sum(fv(r,'revenue_2024') for r in rs if fv(r,'revenue_2024'))/1e9, 1),
+            'total_acres': round(sum(acres_list)),
+            'w_acres': len(acres_list),
+            'avg_distress': round(avg([fv(r,'distress_score') for r in rs]) or 0, 1),
+            'med_enroll': round(med([fv(r,'enrollment_2024') for r in rs]) or 0),
+            'crit_high': sum(1 for r in rs if r.get('distress_category') in ('Critical','High')),
+        })
+
+    # ── 990 by type ───────────────────────────────────────────────────────
+    by_type_990 = defaultdict(list)
+    for r in hb990: by_type_990[r.get('institution_type','Unknown')].append(r)
+    n990_types = []
+    for t, rs in sorted(by_type_990.items(), key=lambda x:-len(x[1])):
+        acres_list = [get_acres(r) for r in rs if get_acres(r)]
+        n990_types.append({
+            'type': t, 'count': len(rs),
+            'pct': pct(len(rs), len(hb990)),
+            'total_assets_m': round(sum(fv(r,'assets_2024') for r in rs if fv(r,'assets_2024'))/1e6),
+            'total_liab_m': round(sum(fv(r,'liabilities_2024') for r in rs if fv(r,'liabilities_2024'))/1e6),
+            'total_rev_m': round(sum(fv(r,'revenue_2024') for r in rs if fv(r,'revenue_2024'))/1e6),
+            'total_acres': round(sum(acres_list)),
+            'w_acres': len(acres_list),
+            'avg_distress': round(avg([fv(r,'distress_score') for r in rs]) or 0, 1),
+            'med_rev_k': round((med([fv(r,'revenue_2024') for r in rs]) or 0)/1000),
+            'pct_op_loss': round(pct(sum(1 for r in rs if flag(r,'flag_990_operating_loss')), len(rs))),
+            'pct_neg_ast': round(pct(sum(1 for r in rs if flag(r,'flag_990_negative_net_assets')), len(rs))),
+        })
+
+    # ── Top 50 distress ───────────────────────────────────────────────────
+    top50_ipeds = []
+    for r in sorted(ipeds, key=lambda r:-(fv(r,'distress_score') or 0))[:50]:
+        top50_ipeds.append({
+            'name': r.get('institution_name',''), 'city': r.get('city',''),
+            'state': r.get('state',''), 'type': r.get('institution_type',''),
+            'distress': round(fv(r,'distress_score') or 0, 1),
+            'category': r.get('distress_category',''),
+            'cr': round(fv(r,'closure_risk_score') or 0, 3),
+            'risk_tier': r.get('risk_tier',''),
+            'enrollment': round(fv(r,'enrollment_2024') or 0),
+            'revenue_m': round((fv(r,'revenue_2024') or 0)/1e6, 1),
+            'acres': round(get_acres(r) or 0),
+            'urbanization': r.get('urbanization',''),
+        })
+
+    top50_990 = []
+    for r in sorted(hb990, key=lambda r:-(fv(r,'distress_score') or 0))[:50]:
+        top50_990.append({
+            'name': r.get('institution_name',''), 'city': r.get('city',''),
+            'state': r.get('state',''), 'type': r.get('institution_type',''),
+            'distress': round(fv(r,'distress_score') or 0, 1),
+            'category': r.get('distress_category',''),
+            'revenue_k': round((fv(r,'revenue_2024') or 0)/1000),
+            'acres': round(get_acres(r) or 0),
+            'pct_neg_ast': flag(r,'flag_990_negative_net_assets'),
+            'pct_op_loss': flag(r,'flag_990_operating_loss'),
+            'ppe_k': round((fv(r,'plant_property_equipment') or 0)/1000),
+        })
+
+    # ── Full acreage table (IPEDS) ────────────────────────────────────────
+    acreage_rows = []
+    for r in sorted(ipeds, key=lambda r:-(get_acres(r) or 0)):
+        a = get_acres(r)
+        if not a: continue
+        acreage_rows.append({
+            'name': r.get('institution_name',''), 'city': r.get('city',''),
+            'state': r.get('state',''), 'type': r.get('institution_type',''),
+            'acres': round(a, 1),
+            'distress': round(fv(r,'distress_score') or 0, 1),
+            'category': r.get('distress_category',''),
+            'cr': round(fv(r,'closure_risk_score') or 0, 3),
+            'enrollment': round(fv(r,'enrollment_2024') or 0),
+            'revenue_m': round((fv(r,'revenue_2024') or 0)/1e6, 1),
+            'urbanization': r.get('urbanization',''),
+            'source': r.get('acreage_source','scraper'),
+        })
+
+    # ── Aggregate numbers ─────────────────────────────────────────────────
+    ipeds_crit = [r for r in ipeds if r.get('distress_category') in ('Critical','High')]
+    hb990_crit = [r for r in hb990 if r.get('distress_category') in ('Critical','High')]
+    ia = sum(get_acres(r) for r in ipeds if get_acres(r))
+    ha = sum(get_acres(r) for r in hb990 if get_acres(r))
+
     return {
-        'run_date':datetime.datetime.now().strftime('%B %d, %Y'),
-        'total':len(rows),'n_ipeds':len(ipeds),'n_990':len(hb990),
-        'ipeds_enr_total_m':round(sum(fv(r,'enrollment_2024') for r in ipeds if fv(r,'enrollment_2024'))/1e6,1),
-        'ipeds_rev_total_b':round(sum(fv(r,'revenue_2024') for r in ipeds if fv(r,'revenue_2024'))/1e9,1),
-        'ipeds_exp_total_b':round(sum(fv(r,'expenses_2024') for r in ipeds if fv(r,'expenses_2024'))/1e9,1),
-        'ipeds_acres_total':round(ia),'ipeds_w_acres':sum(1 for r in ipeds if get_acres(r)),
-        'ipeds_acres_pct':round(pct(sum(1 for r in ipeds if get_acres(r)),len(ipeds))),
-        'ipeds_med_acres':round(med([get_acres(r) for r in ipeds if get_acres(r)])),
-        'ipeds_crit_count':len(ipeds_crit),'ipeds_crit_pct':round(pct(len(ipeds_crit),len(ipeds))),
-        'ipeds_dist_acres':round(ida),
-        'ipeds_land_potential':sum(1 for r in ipeds if flag(r,'flag_land_potential')),
-        'ipeds_hi_land':sum(1 for r in ipeds if flag(r,'flag_high_land_potential')),
-        'ipeds_hi_cr':sum(1 for r in ipeds if (fv(r,'closure_risk_score') or 0)>0.3),
-        'ipeds_dist_cats':{k:v for k,v in Counter(r.get('distress_category','') for r in ipeds).items() if k},
-        'ipeds_risk_tiers':{k:v for k,v in Counter(r.get('risk_tier','') for r in ipeds).items() if k},
-        'ipeds_by_type':type_stats_ipeds(),
-        'n990_rev_total_b':round(sum(fv(r,'revenue_2024') for r in hb990 if fv(r,'revenue_2024'))/1e9,2),
-        'n990_acres_total':round(ha),'n990_w_acres':sum(1 for r in hb990 if get_acres(r)),
-        'n990_acres_pct':round(pct(sum(1 for r in hb990 if get_acres(r)),len(hb990))),
-        'n990_med_acres':round(med([get_acres(r) for r in hb990 if get_acres(r)])),
-        'n990_crit_count':len(hb990_crit),'n990_crit_pct':round(pct(len(hb990_crit),len(hb990))),
-        'n990_op_loss_pct':round(pct(sum(1 for r in hb990 if flag(r,'flag_990_operating_loss')),len(hb990))),
-        'n990_neg_ast_pct':round(pct(sum(1 for r in hb990 if flag(r,'flag_990_negative_net_assets')),len(hb990))),
-        'n990_hi_debt_pct':round(pct(sum(1 for r in hb990 if flag(r,'flag_990_high_debt')),len(hb990))),
-        'n990_consec_pct':round(pct(sum(1 for r in hb990 if flag(r,'flag_990_consecutive_losses')),len(hb990))),
-        'n990_by_type':type_stats_990(),
-        'combined_acres':round(ia+ha),'combined_crit':len(ipeds_crit)+len(hb990_crit),
-        'combined_dist_acres':round(ida+ha),
+        'run_date': datetime.datetime.now().strftime('%B %d, %Y'),
+        'total': len(rows), 'n_ipeds': len(ipeds), 'n_990': len(hb990),
+        'ipeds_enr_total_m': round(sum(fv(r,'enrollment_2024') for r in ipeds if fv(r,'enrollment_2024'))/1e6, 1),
+        'ipeds_rev_total_b': round(sum(fv(r,'revenue_2024') for r in ipeds if fv(r,'revenue_2024'))/1e9, 1),
+        'ipeds_exp_total_b': round(sum(fv(r,'expenses_2024') for r in ipeds if fv(r,'expenses_2024'))/1e9, 1),
+        'ipeds_acres_total': round(ia), 'ipeds_w_acres': sum(1 for r in ipeds if get_acres(r)),
+        'ipeds_acres_pct': round(pct(sum(1 for r in ipeds if get_acres(r)), len(ipeds))),
+        'ipeds_crit_count': len(ipeds_crit), 'ipeds_crit_pct': round(pct(len(ipeds_crit), len(ipeds))),
+        'n990_rev_total_b': round(sum(fv(r,'revenue_2024') for r in hb990 if fv(r,'revenue_2024'))/1e9, 2),
+        'n990_acres_total': round(ha), 'n990_w_acres': sum(1 for r in hb990 if get_acres(r)),
+        'n990_crit_count': len(hb990_crit), 'n990_crit_pct': round(pct(len(hb990_crit), len(hb990))),
+        'combined_acres': round(ia+ha), 'combined_crit': len(ipeds_crit)+len(hb990_crit),
+        'combined_dist_acres': round(sum(get_acres(r) for r in ipeds_crit if get_acres(r)) + ha),
+        'ipeds_dist': ipeds_dist, 'ipeds_risk': ipeds_risk,
+        'ipeds_types': ipeds_types, 'n990_types': n990_types,
+        'top50_ipeds': top50_ipeds, 'top50_990': top50_990,
+        'acreage_rows': acreage_rows,
     }
 
+
+# ── HTML helpers ──────────────────────────────────────────────────────────
+
+CSS = """
+:root{--bg:#0f1117;--surface:#181a20;--surface2:#1e2028;--border:#2a2d37;
+--text:#e2e4e9;--text2:#8b8fa3;--accent:#6c5ce7;--accent2:#a29bfe;--hb990:#00b894;
+--font:'DM Sans',-apple-system,sans-serif;--mono:'JetBrains Mono',monospace;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;}
+nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:14px;
+    padding:0 24px;height:52px;background:var(--surface);border-bottom:1px solid var(--border);}
+.nav-logo{font-size:16px;font-weight:700;letter-spacing:-.5px;
+  background:linear-gradient(135deg,var(--accent2),#74b9ff);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+.nav-sep{width:1px;height:18px;background:var(--border);}
+.nav-spacer{flex:1;}
+.nav-back{padding:5px 12px;border-radius:6px;background:var(--surface2);
+  border:1px solid var(--border);color:var(--text2);font-size:11px;font-weight:600;
+  text-decoration:none;margin-left:6px;}
+.nav-back:hover{border-color:var(--accent);color:var(--text);}
+.page{max-width:1280px;margin:0 auto;padding:28px 24px 80px;}
+.tabs{display:flex;gap:0;margin-bottom:24px;border-bottom:1px solid var(--border);}
+.tab{padding:8px 20px;border:1px solid transparent;border-bottom:none;border-radius:6px 6px 0 0;
+  background:transparent;color:var(--text2);font-family:var(--font);font-size:12px;
+  font-weight:600;cursor:pointer;transition:all .15s;margin-bottom:-1px;}
+.tab.active{background:var(--surface);border-color:var(--border);
+  border-bottom-color:var(--surface);color:var(--text);}
+.tab:hover:not(.active){color:var(--text);}
+.panel{display:none;} .panel.active{display:block;}
+.section{margin-bottom:28px;}
+.section-head{font-family:var(--mono);font-size:10px;color:var(--text2);
+  text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;
+  padding-bottom:8px;border-bottom:1px solid var(--border);}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:24px;}
+.metrics-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:24px;}
+.metric{background:var(--surface2);border-radius:8px;padding:14px;}
+.metric.accent{background:rgba(108,92,231,.1);border:1px solid rgba(108,92,231,.2);}
+.metric.green{background:rgba(0,184,148,.08);border:1px solid rgba(0,184,148,.2);}
+.metric.red{background:rgba(226,75,74,.08);border:1px solid rgba(226,75,74,.2);}
+.metric.hb990{background:rgba(0,184,148,.08);border:1px solid rgba(0,184,148,.3);}
+.metric-label{font-size:11px;color:var(--text2);margin-bottom:4px;}
+.metric-value{font-size:22px;font-weight:600;line-height:1.1;}
+.metric-sub{font-size:10px;color:var(--text2);margin-top:3px;}
+.callout{padding:14px 18px;border-radius:8px;border-left:3px solid var(--hb990);
+  background:rgba(0,184,148,.06);margin-bottom:24px;
+  display:flex;gap:40px;align-items:flex-end;flex-wrap:wrap;}
+.callout-val{font-size:30px;font-weight:700;color:#00b894;}
+.callout-lbl{font-size:11px;color:#a8e6da;}
+.tbl-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);}
+.tbl-wrap::-webkit-scrollbar{height:4px;}
+.tbl-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+table{width:100%;border-collapse:collapse;font-size:11px;}
+thead th{padding:8px 10px;text-align:left;font-family:var(--mono);font-size:9px;
+  color:var(--text2);text-transform:uppercase;letter-spacing:.6px;
+  border-bottom:1px solid var(--border);background:var(--surface2);
+  white-space:nowrap;cursor:pointer;user-select:none;position:sticky;top:0;}
+thead th:hover{color:var(--text);}
+tbody td{padding:7px 10px;border-bottom:1px solid rgba(42,45,55,.4);vertical-align:middle;}
+tbody tr:hover td{background:rgba(255,255,255,.015);}
+tbody tr:last-child td{border-bottom:none;}
+.mono{font-family:var(--mono);}
+.pill{display:inline-block;padding:2px 7px;border-radius:3px;
+  font-family:var(--mono);font-size:9px;font-weight:600;}
+.pill-critical{background:rgba(255,71,87,.15);color:#ff4757;}
+.pill-high{background:rgba(255,107,53,.15);color:#ff6b35;}
+.pill-moderate{background:rgba(255,165,2,.15);color:#ffa502;}
+.pill-low{background:rgba(59,130,246,.15);color:#74b9ff;}
+.pill-healthy{background:rgba(16,185,129,.15);color:#10b981;}
+.pill-elevated{background:rgba(186,117,23,.15);color:#ffa502;}
+.tbl-search{width:100%;padding:8px 12px;background:var(--surface2);
+  border:1px solid var(--border);border-radius:6px 6px 0 0;
+  color:var(--text);font-family:var(--font);font-size:11px;outline:none;
+  border-bottom:none;}
+.tbl-search:focus{border-color:var(--accent);}
+.tbl-count{font-family:var(--mono);font-size:10px;color:var(--text2);
+  padding:6px 12px;background:var(--surface2);border-bottom:1px solid var(--border);}
+.tbl-scroll{max-height:520px;overflow-y:auto;}
+.tbl-scroll::-webkit-scrollbar{width:4px;}
+.tbl-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+.footer{font-size:10px;color:var(--text2);text-align:right;margin-top:32px;
+  padding-top:16px;border-top:1px solid var(--border);}
+@media(max-width:768px){.metrics{grid-template-columns:repeat(2,1fr);}
+  .metrics-3{grid-template-columns:1fr 1fr;}}
+"""
+
+def metric(label, value, sub='', cls=''):
+    vc = {'accent':'#a29bfe','green':'#00b894','red':'#ff6b35','hb990':'#00b894'}.get(cls,'var(--text)')
+    return (f'<div class="metric {cls}"><div class="metric-label">{label}</div>'
+            f'<div class="metric-value" style="color:{vc}">{value}</div>'
+            f'<div class="metric-sub">{sub}</div></div>')
+
+def th(label, col=''):
+    return f'<th data-col="{col}">{label}</th>'
+
+def pill(cat):
+    c = (cat or '').lower().replace(' ','').replace('/','')
+    return f'<span class="pill pill-{c}">{cat}</span>'
+
+def section(title, body):
+    return f'<div class="section"><div class="section-head">{title}</div>{body}</div>'
+
+
 def build_html(s):
-    dist_order=['Critical','High','Moderate','Low','Healthy']
-    dist_colors={'Critical':'#E24B4A','High':'#BA7517','Moderate':'#378ADD','Low':'#639922','Healthy':'#1D9E75'}
-    risk_order=['Critical','High','Elevated','Moderate','Low']
-    risk_colors={'Critical':'#E24B4A','High':'#BA7517','Elevated':'#ffa502','Moderate':'#378ADD','Low':'#1D9E75'}
+    run_date = s['run_date']
 
-    def pill(val, color):
-        return f'<span style="display:inline-block;padding:2px 7px;border-radius:3px;font-family:var(--mono);font-size:9px;font-weight:600;background:{color}22;color:{color}">{val}</span>'
+    # ── SHARED: callout bar ───────────────────────────────────────────────
+    callout = f'''<div class="callout">
+      <div><div class="callout-val">{s["combined_crit"]:,}</div><div class="callout-lbl">critical/high distress institutions</div></div>
+      <div><div class="callout-val">{s["combined_acres"]:,}</div><div class="callout-lbl">total acres tracked</div></div>
+      <div><div class="callout-val">{s["combined_dist_acres"]:,}</div><div class="callout-lbl">acres held by distressed institutions</div></div>
+      <div><div class="callout-val">~{round(s["combined_dist_acres"]/640):,}</div><div class="callout-lbl">square miles addressable</div></div>
+    </div>'''
 
-    def bar_row(label, pct_val, color, display_val, lw=190):
-        return (f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">'
-                f'<span style="font-size:11px;color:var(--text2);flex-shrink:0;width:{lw}px;text-align:right">{label}</span>'
-                f'<div style="flex:1;height:7px;background:var(--border);border-radius:3px;overflow:hidden">'
-                f'<div style="width:{min(100,pct_val)}%;height:100%;border-radius:3px;background:{color}"></div></div>'
-                f'<span style="font-size:11px;font-weight:500;color:var(--text);width:90px;font-family:var(--mono)">{display_val}</span></div>')
+    # ── ALL tab ───────────────────────────────────────────────────────────
+    panel_all = f'''
+    <div class="metrics">
+      {metric("Total institutions", f"{s['total']:,}", "IPEDS + IRS Form 990", "accent")}
+      {metric("Higher education (IPEDS)", f"{s['n_ipeds']:,}", "Colleges &amp; universities")}
+      {metric("Nonprofits (990)", f"{s['n_990']:,}", "Faith, recreation, housing, more")}
+      {metric("Critical/High distress", f"{s['combined_crit']:,}", "Across both datasets", "red")}
+    </div>
+    <div class="metrics-3">
+      {metric("Combined acreage", f"{s['combined_acres']:,}", "acres across all institutions", "green")}
+      {metric("IPEDS acreage", f"{s['ipeds_acres_total']:,}", f"{s['ipeds_w_acres']:,} institutions ({s['ipeds_acres_pct']}%)")}
+      {metric("Nonprofit acreage", f"{s['n990_acres_total']:,}", f"{s['n990_w_acres']:,} institutions")}
+    </div>'''
 
-    def metric(label, value, sub='', cls=''):
-        bg = {'accent':'background:rgba(108,92,231,.1);border:1px solid rgba(108,92,231,.2)',
-              'green':'background:rgba(0,184,148,.08);border:1px solid rgba(0,184,148,.2)',
-              'red':'background:rgba(226,75,74,.08);border:1px solid rgba(226,75,74,.2)',
-              'hb990':'background:rgba(0,184,148,.08);border:1px solid rgba(0,184,148,.3)',
-              }.get(cls,'background:var(--surface2)')
-        vc = {'accent':'#a29bfe','green':'#00b894','red':'#ff6b35','hb990':'#00b894'}.get(cls,'var(--text)')
-        return (f'<div style="border-radius:8px;padding:14px;{bg}">'
-                f'<div style="font-size:11px;color:var(--text2);margin-bottom:4px">{label}</div>'
-                f'<div style="font-size:22px;font-weight:600;color:{vc};line-height:1.1">{value}</div>'
-                f'<div style="font-size:10px;color:var(--text2);margin-top:3px">{sub}</div></div>')
+    # ── IPEDS tab ─────────────────────────────────────────────────────────
+    # Distress table
+    dist_rows = ''.join(
+        f'''<tr>
+          <td>{pill(d["cat"])}</td>
+          <td class="mono">{d["count"]:,}</td>
+          <td class="mono">{d["pct"]}%</td>
+          <td class="mono">{d["avg_distress"]}</td>
+          <td class="mono">${d["avg_revenue_m"]}M</td>
+          <td class="mono">{d["avg_enroll"]:,}</td>
+          <td class="mono">{d["avg_cr"]}</td>
+        </tr>''' for d in s['ipeds_dist'])
 
-    def grid(*cells, cols=4):
-        return (f'<div style="display:grid;grid-template-columns:repeat({cols},minmax(0,1fr));'
-                f'gap:12px;margin-bottom:24px">{"".join(cells)}</div>')
+    dist_table = f'''<div class="tbl-wrap"><table>
+      <thead><tr>{th("Category")}{th("Count","count")}{th("%","pct")}{th("Avg Distress","avg_distress")}{th("Avg Revenue","avg_revenue_m")}{th("Avg Enrollment","avg_enroll")}{th("Avg Closure Risk","avg_cr")}</tr></thead>
+      <tbody>{dist_rows}</tbody></table></div>'''
 
-    def card(title, body):
-        return (f'<div style="background:var(--surface);border:1px solid var(--border);'
-                f'border-radius:10px;padding:18px;margin-bottom:16px">'
-                f'<div style="font-family:var(--mono);font-size:10px;color:var(--text2);'
-                f'text-transform:uppercase;letter-spacing:1px;margin-bottom:14px">{title}</div>{body}</div>')
+    # ML risk table
+    risk_rows = ''.join(
+        f'''<tr>
+          <td>{pill(r["tier"])}</td>
+          <td class="mono">{r["count"]:,}</td>
+          <td class="mono">{r["pct"]}%</td>
+          <td class="mono">{r["avg_cr"] if r["avg_cr"] is not None else "—"}</td>
+          <td class="mono">{r["avg_distress"] if r["avg_distress"] is not None else "—"}</td>
+          <td class="mono">{("$"+str(r["avg_revenue_m"])+"M") if r["avg_revenue_m"] is not None else "—"}</td>
+          <td class="mono">{(str(r["avg_enroll"])) if r["avg_enroll"] is not None else "—"}</td>
+        </tr>''' for r in s['ipeds_risk'])
 
-    def section_head(label):
-        return (f'<div style="display:flex;align-items:center;gap:10px;margin:24px 0 14px">'
-                f'<div style="font-family:var(--mono);font-size:10px;color:var(--text2);'
-                f'text-transform:uppercase;letter-spacing:1px;white-space:nowrap">{label}</div>'
-                f'<div style="flex:1;height:1px;background:var(--border)"></div></div>')
+    risk_table = f'''<div class="tbl-wrap"><table>
+      <thead><tr>{th("ML Risk Tier")}{th("Count","count")}{th("%","pct")}{th("Avg ML Score","avg_cr")}{th("Avg Distress","avg_distress")}{th("Avg Revenue","avg_revenue_m")}{th("Avg Enrollment","avg_enroll")}</tr></thead>
+      <tbody>{risk_rows}</tbody></table></div>'''
 
-    th = lambda t: (f'<th style="padding:7px 10px;text-align:left;font-family:var(--mono);font-size:9px;'
-                    f'color:var(--text2);text-transform:uppercase;letter-spacing:.6px;'
-                    f'border-bottom:1px solid var(--border);background:var(--surface2);white-space:nowrap">{t}</th>')
+    # By type table
+    type_rows_ipeds = ''.join(
+        f'''<tr>
+          <td style="max-width:200px">{t["type"]}</td>
+          <td class="mono">{t["count"]:,}</td>
+          <td class="mono">{t["pct"]}%</td>
+          <td class="mono">${t["total_assets_b"]}B</td>
+          <td class="mono">${t["total_liab_b"]}B</td>
+          <td class="mono">${t["total_rev_b"]}B</td>
+          <td class="mono">{t["total_acres"]:,}</td>
+          <td class="mono">{t["avg_distress"]}</td>
+          <td class="mono">{t["med_enroll"]:,}</td>
+          <td class="mono" style="color:#ff6b35">{t["crit_high"]:,}</td>
+        </tr>''' for t in s['ipeds_types'])
 
-    def ipeds_table():
-        rows_html=''
-        for t,d in s['ipeds_by_type'].items():
-            if d['count']<=1: continue
-            ds=d['med_distress']
-            dc='#ff6b35' if ds>=60 else '#ffa502' if ds>=40 else '#74b9ff' if ds>=20 else '#10b981'
-            rows_html+=(f'<tr><td style="font-weight:500">{t}</td>'
-                        f'<td style="font-family:var(--mono)">{d["count"]:,}</td>'
-                        f'<td style="font-family:var(--mono)">{d["pct"]}%</td>'
-                        f'<td style="font-family:var(--mono)">{d["total_acres"]:,}</td>'
-                        f'<td>{pill(ds,dc)}</td>'
-                        f'<td style="font-family:var(--mono)">${d["med_rev_m"]}M</td>'
-                        f'<td style="font-family:var(--mono)">{d["med_enr"]:,}</td>'
-                        f'<td style="font-family:var(--mono);color:#ff6b35">{d["crit_high"]:,}</td></tr>')
-        heads=''.join(th(h) for h in ['Type','Count','%','Total Acres','Med. Distress','Med. Revenue','Med. Enroll','Crit/High'])
-        return f'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr>{heads}</tr></thead><tbody>{rows_html}</tbody></table></div>'
+    type_table_ipeds = f'''<div class="tbl-wrap"><table>
+      <thead><tr>{th("Type")}{th("Count","count")}{th("%","pct")}{th("Total Assets","total_assets_b")}{th("Total Liabilities","total_liab_b")}{th("Total Revenue","total_rev_b")}{th("Total Acres","total_acres")}{th("Avg Distress","avg_distress")}{th("Med. Enrollment","med_enroll")}{th("Crit/High","crit_high")}</tr></thead>
+      <tbody>{type_rows_ipeds}</tbody></table></div>'''
 
-    def n990_table():
-        rows_html=''
-        for t,d in s['n990_by_type'].items():
-            rows_html+=(f'<tr><td style="font-weight:500">{t}</td>'
-                        f'<td style="font-family:var(--mono)">{d["count"]:,}</td>'
-                        f'<td style="font-family:var(--mono)">{d["pct"]}%</td>'
-                        f'<td style="font-family:var(--mono)">{d["total_acres"]:,}</td>'
-                        f'<td style="font-family:var(--mono)">${d["med_rev_k"]:,}K</td>'
-                        f'<td>{pill(str(d["pct_op_loss"])+"%","#E24B4A")}</td>'
-                        f'<td>{pill(str(d["pct_neg_ast"])+"%","#BA7517")}</td>'
-                        f'<td>{pill(str(d["pct_hi_debt"])+"%","#378ADD")}</td></tr>')
-        heads=''.join(th(h) for h in ['Category','Count','%','Total Acres','Med. Revenue','Op. Loss','Neg. Assets','High Debt'])
-        return f'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr>{heads}</tr></thead><tbody>{rows_html}</tbody></table></div>'
+    # Top 50 IPEDS
+    top50_ipeds_rows = ''.join(
+        f'''<tr>
+          <td style="font-weight:600;max-width:200px">{r["name"]}<small style="display:block;font-size:9px;color:var(--text2);font-weight:400">{r["city"]}, {r["state"]}</small></td>
+          <td style="font-size:9px;color:var(--text2)">{r["type"].replace("Private Non-Profit | ","NP ").replace("Private For-Profit | ","FP ").replace("Public | ","Pub ")}</td>
+          <td>{pill(r["category"])}</td>
+          <td class="mono" style="color:{'#ff4757' if r['distress']>=70 else '#ff6b35' if r['distress']>=50 else '#ffa502'}">{r["distress"]}</td>
+          <td class="mono">{r["cr"]}</td>
+          <td class="mono">{pill(r["risk_tier"]) if r["risk_tier"] else "—"}</td>
+          <td class="mono">{r["enrollment"]:,}</td>
+          <td class="mono">${r["revenue_m"]}M</td>
+          <td class="mono">{r["acres"]:,} ac</td>
+          <td style="font-size:9px;color:var(--text2)">{r["urbanization"]}</td>
+        </tr>''' for r in s['top50_ipeds'])
 
-    dist_bars=''.join(bar_row(c,round(s['ipeds_dist_cats'].get(c,0)/s['n_ipeds']*100),dist_colors.get(c,'#888'),
-                              f"{s['ipeds_dist_cats'].get(c,0):,} ({round(s['ipeds_dist_cats'].get(c,0)/s['n_ipeds']*100,1)}%)")
-                      for c in dist_order if c in s['ipeds_dist_cats'])
-    risk_bars=''.join(bar_row(t,round(s['ipeds_risk_tiers'].get(t,0)/s['n_ipeds']*100),risk_colors.get(t,'#888'),
-                              f"{s['ipeds_risk_tiers'].get(t,0):,} ({round(s['ipeds_risk_tiers'].get(t,0)/s['n_ipeds']*100,1)}%)")
-                      for t in risk_order if t in s['ipeds_risk_tiers'])
+    top50_ipeds_table = f'''<div class="tbl-wrap"><div class="tbl-scroll"><table>
+      <thead><tr>{th("Institution")}{th("Type")}{th("Category","category")}{th("Distress","distress")}{th("Closure Risk","cr")}{th("ML Tier","risk_tier")}{th("Enrollment","enrollment")}{th("Revenue","revenue_m")}{th("Acres","acres")}{th("Urbanization","urbanization")}</tr></thead>
+      <tbody>{top50_ipeds_rows}</tbody></table></div></div>'''
+
+    # Acreage table with search
+    acreage_rows_html = ''.join(
+        f'''<tr>
+          <td style="font-weight:600;max-width:200px">{r["name"]}<small style="display:block;font-size:9px;color:var(--text2);font-weight:400">{r["city"]}, {r["state"]}</small></td>
+          <td style="font-size:9px;color:var(--text2)">{r["type"].replace("Private Non-Profit | ","NP ").replace("Private For-Profit | ","FP ").replace("Public | ","Pub ")}</td>
+          <td class="mono" style="font-weight:600">{r["acres"]:,}</td>
+          <td>{pill(r["category"])}</td>
+          <td class="mono">{r["distress"]}</td>
+          <td class="mono">{r["cr"]}</td>
+          <td class="mono">{r["enrollment"]:,}</td>
+          <td class="mono">${r["revenue_m"]}M</td>
+          <td style="font-size:9px;color:var(--text2)">{r["urbanization"]}</td>
+        </tr>''' for r in s['acreage_rows'])
+
+    acreage_table = f'''
+      <input class="tbl-search" id="acreageSearch" placeholder="Search institutions, state, city…" oninput="filterTable('acreageSearch','acreageBody')">
+      <div class="tbl-count" id="acreageCount">{len(s['acreage_rows']):,} institutions with acreage data</div>
+      <div class="tbl-wrap"><div class="tbl-scroll"><table>
+        <thead><tr>{th("Institution")}{th("Type")}{th("Acres","acres")}{th("Category","category")}{th("Distress","distress")}{th("Closure Risk","cr")}{th("Enrollment","enrollment")}{th("Revenue","revenue_m")}{th("Urbanization")}</tr></thead>
+        <tbody id="acreageBody">{acreage_rows_html}</tbody>
+      </table></div></div>'''
+
+    panel_ipeds = f'''
+    <div class="metrics">
+      {metric("Institutions", f"{s['n_ipeds']:,}", "Colleges &amp; universities", "accent")}
+      {metric("Total enrollment", f"{s['ipeds_enr_total_m']}M", "Students enrolled (2024)")}
+      {metric("Total revenue", f"${s['ipeds_rev_total_b']}B", "Annual sector revenue")}
+      {metric("Critical/High distress", f"{s['ipeds_crit_count']:,}", f"{s['ipeds_crit_pct']}% of IPEDS institutions", "red")}
+    </div>
+    {section("Table 1 — Distress Category Breakdown", dist_table)}
+    {section("Table 2 — ML Closure Risk Tier Breakdown", risk_table)}
+    {section("Table 3 — Summary by Institution Type", type_table_ipeds)}
+    {section("Table 4 — Top 50 Highest Distress Institutions", top50_ipeds_table)}
+    {section(f"Table 5 — Full Acreage Detail ({len(s['acreage_rows']):,} institutions)", acreage_table)}'''
+
+    # ── 990 tab ───────────────────────────────────────────────────────────
+    type_rows_990 = ''.join(
+        f'''<tr>
+          <td>{t["type"]}</td>
+          <td class="mono">{t["count"]:,}</td>
+          <td class="mono">{t["pct"]}%</td>
+          <td class="mono">${t["total_assets_m"]:,}M</td>
+          <td class="mono">${t["total_liab_m"]:,}M</td>
+          <td class="mono">${t["total_rev_m"]:,}M</td>
+          <td class="mono">{t["total_acres"]:,}</td>
+          <td class="mono">{t["avg_distress"]}</td>
+          <td class="mono">${t["med_rev_k"]:,}K</td>
+          <td class="mono" style="color:#ff6b35">{t["pct_op_loss"]}%</td>
+          <td class="mono" style="color:#ffa502">{t["pct_neg_ast"]}%</td>
+        </tr>''' for t in s['n990_types'])
+
+    type_table_990 = f'''<div class="tbl-wrap"><table>
+      <thead><tr>{th("Category")}{th("Count","count")}{th("%","pct")}{th("Total Assets","total_assets_m")}{th("Total Liabilities","total_liab_m")}{th("Total Revenue","total_rev_m")}{th("Total Acres","total_acres")}{th("Avg Distress","avg_distress")}{th("Med. Revenue","med_rev_k")}{th("Op. Loss %","pct_op_loss")}{th("Neg. Assets %","pct_neg_ast")}</tr></thead>
+      <tbody>{type_rows_990}</tbody></table></div>'''
+
+    top50_990_rows = ''.join(
+        f'''<tr>
+          <td style="font-weight:600;max-width:200px">{r["name"]}<small style="display:block;font-size:9px;color:var(--text2);font-weight:400">{r["city"]}, {r["state"]}</small></td>
+          <td style="font-size:9px;color:var(--text2)">{r["type"]}</td>
+          <td>{pill(r["category"])}</td>
+          <td class="mono" style="color:#ff6b35">{r["distress"]}</td>
+          <td class="mono">${r["revenue_k"]:,}K</td>
+          <td class="mono">${r["ppe_k"]:,}K</td>
+          <td class="mono">{r["acres"]:,} ac</td>
+          <td>{"<span style='color:#ff4757'>Yes</span>" if r["pct_neg_ast"] else "<span style='color:var(--text2)'>No</span>"}</td>
+          <td>{"<span style='color:#ff6b35'>Yes</span>" if r["pct_op_loss"] else "<span style='color:var(--text2)'>No</span>"}</td>
+        </tr>''' for r in s['top50_990'])
+
+    top50_990_table = f'''<div class="tbl-wrap"><div class="tbl-scroll"><table>
+      <thead><tr>{th("Institution")}{th("Type")}{th("Category","category")}{th("Distress","distress")}{th("Revenue","revenue_k")}{th("PP&E","ppe_k")}{th("Acres","acres")}{th("Neg. Assets")}{th("Op. Loss")}</tr></thead>
+      <tbody>{top50_990_rows}</tbody></table></div></div>'''
+
+    panel_990 = f'''
+    <div class="metrics">
+      {metric("Institutions", f"{s['n_990']:,}", "Nonprofits across 10 categories", "hb990")}
+      {metric("Total revenue", f"${s['n990_rev_total_b']}B", "Annual nonprofit sector revenue")}
+      {metric("Critical/High distress", f"{s['n990_crit_count']:,}", f"{s['n990_crit_pct']}% of 990 institutions", "red")}
+      {metric("Total acreage", f"{s['n990_acres_total']:,}", f"{s['n990_w_acres']:,} institutions with data", "green")}
+    </div>
+    {section("Table 6 — Summary by Nonprofit Category", type_table_990)}
+    {section("Table 7 — Top 50 Highest Distress Nonprofits", top50_990_table)}'''
+
+    # ── JS ────────────────────────────────────────────────────────────────
+    js = """
+function filterTable(inputId, tbodyId) {
+  var q = document.getElementById(inputId).value.toLowerCase();
+  var rows = document.getElementById(tbodyId).querySelectorAll('tr');
+  var shown = 0;
+  rows.forEach(function(tr) {
+    var match = tr.textContent.toLowerCase().indexOf(q) >= 0;
+    tr.style.display = match ? '' : 'none';
+    if (match) shown++;
+  });
+  var countEl = document.getElementById(inputId.replace('Search','Count'));
+  if (countEl) countEl.textContent = shown.toLocaleString() + ' institutions shown';
+}
+['tabAll','tabIPEDS','tab990'].forEach(function(id) {
+  document.getElementById(id).addEventListener('click', function() {
+    document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+    document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
+    this.classList.add('active');
+    document.getElementById('panel'+id.replace('tab','')).classList.add('active');
+  });
+});"""
 
     return f"""<!DOCTYPE html>
 <html lang="en"><head>
@@ -178,24 +491,7 @@ def build_html(s):
 <title>Hummingbird \u2014 Market Summary</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-:root{{--bg:#0f1117;--surface:#181a20;--surface2:#1e2028;--border:#2a2d37;
---text:#e2e4e9;--text2:#8b8fa3;--accent:#6c5ce7;--accent2:#a29bfe;--hb990:#00b894;
---font:'DM Sans',-apple-system,sans-serif;--mono:'JetBrains Mono',monospace;}}
-*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0;}}
-html,body{{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;}}
-nav{{position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:14px;padding:0 24px;height:52px;background:var(--surface);border-bottom:1px solid var(--border);}}
-.nav-logo{{font-size:16px;font-weight:700;letter-spacing:-.5px;background:linear-gradient(135deg,var(--accent2),#74b9ff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}}
-.nav-sep,.nav-spacer{{flex-shrink:0;}} .nav-sep{{width:1px;height:18px;background:var(--border);}} .nav-spacer{{flex:1;}}
-.nav-back{{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-size:11px;font-weight:600;text-decoration:none;margin-left:6px;}}
-.nav-back:hover{{border-color:var(--accent);color:var(--text);}}
-.page{{max-width:1200px;margin:0 auto;padding:28px 24px 80px;}}
-.tabs{{display:flex;gap:0;margin-bottom:24px;border-bottom:1px solid var(--border);}}
-.tab{{padding:8px 20px;border:1px solid transparent;border-bottom:none;border-radius:6px 6px 0 0;background:transparent;color:var(--text2);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;margin-bottom:-1px;}}
-.tab.active{{background:var(--surface);border-color:var(--border);border-bottom-color:var(--surface);color:var(--text);}}
-.tab:hover:not(.active){{color:var(--text);}} .panel{{display:none;}} .panel.active{{display:block;}}
-td{{padding:7px 10px;border-bottom:1px solid rgba(42,45,55,.5);vertical-align:middle;}} tr:hover td{{background:rgba(255,255,255,.015);}}
-</style></head><body>
+<style>{CSS}</style></head><body>
 <nav>
   <div class="nav-logo">Hummingbird</div><div class="nav-sep"></div>
   <span style="font-size:11px;color:var(--text2);font-weight:500">Market Summary</span>
@@ -206,58 +502,24 @@ td{{padding:7px 10px;border-bottom:1px solid rgba(42,45,55,.5);vertical-align:mi
 <div class="page">
   <div style="font-family:var(--mono);font-size:10px;color:var(--accent2);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">Phase I \u00b7 Market Intelligence</div>
   <div style="font-size:26px;font-weight:700;letter-spacing:-.5px;margin-bottom:6px">Market Opportunity Summary</div>
-  <div style="font-size:12px;color:var(--text2);line-height:1.6;max-width:700px;margin-bottom:20px">Aggregated analysis of {s['total']:,} tracked institutions. Source: IPEDS/NCES, IRS Form 990, OSM land scrape. Updated {s['run_date']}.</div>
-  <div style="padding:14px 18px;border-radius:8px;border-left:3px solid var(--hb990);background:rgba(0,184,148,.06);margin-bottom:24px;display:flex;gap:40px;align-items:flex-end;flex-wrap:wrap">
-    <div><div style="font-size:30px;font-weight:700;color:#00b894">{s['combined_crit']:,}</div><div style="font-size:11px;color:#a8e6da">critical/high distress institutions</div></div>
-    <div><div style="font-size:30px;font-weight:700;color:#00b894">{s['combined_acres']:,}</div><div style="font-size:11px;color:#a8e6da">total acres tracked</div></div>
-    <div><div style="font-size:30px;font-weight:700;color:#00b894">{s['combined_dist_acres']:,}</div><div style="font-size:11px;color:#a8e6da">distressed acres</div></div>
-    <div><div style="font-size:30px;font-weight:700;color:#00b894">~{round(s['combined_dist_acres']/640):,}</div><div style="font-size:11px;color:#a8e6da">sq miles addressable</div></div>
+  <div style="font-size:12px;color:var(--text2);line-height:1.6;max-width:700px;margin-bottom:20px">
+    {s['total']:,} institutions tracked across higher education and the nonprofit sector.
+    Source: IPEDS/NCES, IRS Form 990, OSM land scrape. Updated {run_date}.
   </div>
+  {callout}
   <div class="tabs">
     <div class="tab active" id="tabAll">All Institutions</div>
     <div class="tab" id="tabIPEDS">IPEDS \u2014 Higher Ed</div>
     <div class="tab" id="tab990">990 \u2014 Nonprofits</div>
   </div>
-
-  <div class="panel active" id="panelAll">
-    {grid(metric('Total institutions','12,911','IPEDS + IRS Form 990','accent'),metric('Higher education',f"{s['n_ipeds']:,}",'Colleges & universities'),metric('Nonprofits',f"{s['n_990']:,}",'Faith, recreation, housing, more'),metric('Critical/High distress',f"{s['combined_crit']:,}",'Across both datasets','red'),cols=4)}
-    {grid(metric('Combined acreage',f"{s['combined_acres']:,}","acres across both datasets",'green'),metric('IPEDS acreage',f"{s['ipeds_acres_total']:,}",f"{s['ipeds_w_acres']:,} institutions ({s['ipeds_acres_pct']}%)"),metric('Nonprofit acreage',f"{s['n990_acres_total']:,}",f"{s['n990_w_acres']:,} institutions ({s['n990_acres_pct']}%)"),cols=3)}
-    {card('Distressed acreage',bar_row('IPEDS distressed',round(s['ipeds_dist_acres']/max(s['combined_dist_acres'],1)*100),'#E24B4A',f"{s['ipeds_dist_acres']:,} ac")+bar_row('990 distressed (all)',100,'#00b894',f"{s['n990_acres_total']:,} ac")+bar_row('Combined',100,'#a29bfe',f"{s['combined_dist_acres']:,} ac")+f'<div style="font-size:10px;color:var(--text2);margin-top:10px">~{round(s["combined_dist_acres"]/640):,} square miles of addressable land opportunity</div>')}
-  </div>
-
-  <div class="panel" id="panelIPEDS">
-    {grid(metric('Institutions',f"{s['n_ipeds']:,}",'Colleges & universities','accent'),metric('Total enrollment',f"{s['ipeds_enr_total_m']}M",'Students enrolled (2024)'),metric('Total revenue',f"${s['ipeds_rev_total_b']}B",'Annual sector revenue'),metric('Critical/High distress',f"{s['ipeds_crit_count']:,}",f"{s['ipeds_crit_pct']}% of IPEDS institutions",'red'),cols=4)}
-    {grid(metric('Total acreage',f"{s['ipeds_acres_total']:,}",f"{s['ipeds_acres_pct']}% have data",'green'),metric('Median acres',str(s['ipeds_med_acres']),'Per institution'),metric('Land potential flag',f"{s['ipeds_land_potential']:,}",'Flagged for opportunity'),metric('High closure risk',f"{s['ipeds_hi_cr']:,}",'ML score > 0.3'),cols=4)}
-    {section_head('Distress distribution')}
-    {grid(card('By distress category',dist_bars),card('By ML closure risk tier',risk_bars),cols=2)}
-    {section_head('By institution type')}
-    {card('Summary by ownership and level',ipeds_table())}
-  </div>
-
-  <div class="panel" id="panel990">
-    {grid(metric('Institutions',f"{s['n_990']:,}",'Nonprofits across 10 categories','hb990'),metric('Total revenue',f"${s['n990_rev_total_b']}B",'Annual nonprofit sector revenue'),metric('Critical/High distress',f"{s['n990_crit_count']:,}",f"{s['n990_crit_pct']}% of 990 institutions",'red'),metric('Operating losses',f"{s['n990_op_loss_pct']}%",'Running a current year loss'),cols=4)}
-    {grid(metric('Total acreage',f"{s['n990_acres_total']:,}",f"{s['n990_acres_pct']}% have acreage data",'green'),metric('Negative net assets',f"{s['n990_neg_ast_pct']}%",'Liabilities exceed assets'),metric('High debt burden',f"{s['n990_hi_debt_pct']}%",'Flagged for unsustainable debt'),cols=3)}
-    {section_head('Distress indicators')}
-    {card('% of all 990 institutions flagged',bar_row('Operating loss',s['n990_op_loss_pct'],'#E24B4A',f"{s['n990_op_loss_pct']}%")+bar_row('High debt',s['n990_hi_debt_pct'],'#BA7517',f"{s['n990_hi_debt_pct']}%")+bar_row('Negative net assets',s['n990_neg_ast_pct'],'#ff6b35',f"{s['n990_neg_ast_pct']}%")+bar_row('Consecutive losses',s['n990_consec_pct'],'#ffa502',f"{s['n990_consec_pct']}%"))}
-    {section_head('By nonprofit category')}
-    {card('Summary by institution type',n990_table())}
-  </div>
-
-  <div style="font-size:10px;color:var(--text2);text-align:right;margin-top:32px;padding-top:16px;border-top:1px solid var(--border)">
-    Source: Hummingbird Master Dataset v6 \u00b7 IPEDS/NCES, IRS Form 990, OSM land scrape \u00b7 Updated {s['run_date']}
-  </div>
+  <div class="panel active" id="panelAll">{panel_all}</div>
+  <div class="panel" id="panelIPEDS">{panel_ipeds}</div>
+  <div class="panel" id="panel990">{panel_990}</div>
+  <div class="footer">Source: Hummingbird Master Dataset v6 \u00b7 IPEDS/NCES, IRS Form 990, OSM land scrape \u00b7 {run_date}</div>
 </div>
-<script>
-['tabAll','tabIPEDS','tab990'].forEach(function(id){{
-  document.getElementById(id).addEventListener('click',function(){{
-    document.querySelectorAll('.tab').forEach(function(t){{t.classList.remove('active');}});
-    document.querySelectorAll('.panel').forEach(function(p){{p.classList.remove('active');}});
-    this.classList.add('active');
-    document.getElementById('panel'+id.replace('tab','')).classList.add('active');
-  }});
-}});
-</script>
+<script>{js}</script>
 </body></html>"""
+
 
 def main():
     parser = argparse.ArgumentParser()
