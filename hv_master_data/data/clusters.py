@@ -4,7 +4,7 @@ clusters.py v3 — Hummingbird Ventures Opportunity Cluster Engine
 Rebuilt around three axes meaningful to HV's acquisition thesis:
   1. URGENCY    — how close is this to transacting?
   2. LAND       — how much underleveraged physical asset is here?
-  3. HV FIT     — does the environment match outdoor/wellness programming?
+  3. PR FIT     — does the environment match outdoor/wellness programming?
 
 Institution type is used for LABELING only, not as a clustering feature.
 All IPEDS institutions are clustered together (K=6).
@@ -46,6 +46,107 @@ STATE_REGION = {
     'Nevada':'West','California':'West','Oregon':'West','Washington':'West',
     'Alaska':'West','Hawaii':'West',
 }
+
+# ---------------------------------------------------------------------------
+# Partnership Readiness Score — inline tables (source: partnership_readiness.py)
+# Used as the PR Fit axis in clustering, replacing raw OSM score
+# ---------------------------------------------------------------------------
+_BEA_OUTDOOR = {
+    'Hawaii':6.1,'Alaska':5.3,'Montana':4.9,'Vermont':4.5,'Wyoming':4.3,
+    'Maine':4.1,'Idaho':3.9,'New Mexico':3.7,'Oregon':3.5,'Colorado':3.4,
+    'South Dakota':3.3,'North Dakota':3.2,'Utah':3.1,'West Virginia':3.0,
+    'Arkansas':2.9,'New Hampshire':2.8,'Mississippi':2.8,'Kentucky':2.7,
+    'Tennessee':2.7,'South Carolina':2.6,'Alabama':2.6,'Nevada':2.6,
+    'Wisconsin':2.5,'Minnesota':2.5,'Washington':2.5,'Nebraska':2.5,
+    'Kansas':2.4,'Iowa':2.4,'Missouri':2.4,'Indiana':2.4,
+    'North Carolina':2.3,'Arizona':2.3,'Oklahoma':2.3,'Louisiana':2.3,
+    'Georgia':2.2,'Virginia':2.2,'Michigan':2.2,'Ohio':2.1,
+    'Pennsylvania':2.1,'Texas':2.1,'California':2.0,'Florida':2.0,
+    'Illinois':1.9,'Maryland':1.9,'Massachusetts':1.8,'New Jersey':1.7,
+    'Connecticut':1.6,'New York':1.6,'Delaware':1.6,'Rhode Island':1.5,
+    'District of Columbia':1.0,
+}
+_WICHE_CLIFF = {
+    'Hawaii':-33,'California':-29,'New York':-27,'West Virginia':-26,
+    'Wyoming':-23,'New Mexico':-21,'Oregon':-19,'Pennsylvania':-17,
+    'Mississippi':-16,'Rhode Island':-15,'Vermont':-15,'Alaska':-14,
+    'Maine':-10,'New Hampshire':-10,'Colorado':-12,'Michigan':-11,
+    'Ohio':-11,'Illinois':-10,'Connecticut':-9,'Massachusetts':-9,
+    'Maryland':-8,'Missouri':-8,'Wisconsin':-8,'Indiana':-7,
+    'Minnesota':-7,'Kansas':-7,'Nebraska':-6,'Iowa':-6,
+    'Washington':-5,'Virginia':-5,'Nevada':-4,'Delaware':-4,
+    'New Jersey':-1,'Arizona':2,'Florida':3,'Georgia':4,
+    'North Carolina':5,'Tennessee':6,'South Carolina':7,'Texas':8,
+    'Kentucky':-3,'Alabama':-2,'Louisiana':-3,'Arkansas':-2,
+    'Oklahoma':1,'Utah':3,'Idaho':6,'Montana':4,
+    'North Dakota':5,'South Dakota':4,'District of Columbia':-5,
+}
+_STATE_CLOSURES = {
+    'Pennsylvania':12,'New York':10,'California':8,'Massachusetts':7,
+    'Illinois':6,'Ohio':6,'Michigan':5,'Virginia':5,'Iowa':5,
+    'Indiana':4,'Wisconsin':4,'Minnesota':4,'Missouri':4,'Connecticut':4,
+    'New Jersey':3,'Texas':3,'Florida':3,'Georgia':3,'North Carolina':3,
+    'Vermont':3,'Maine':2,'Oregon':2,'Washington':2,'Kansas':2,
+    'Nebraska':2,'Montana':2,'Tennessee':2,'Alabama':2,'Kentucky':2,
+    'Oklahoma':2,'Colorado':1,'Arizona':1,'New Hampshire':1,
+    'Rhode Island':1,'West Virginia':1,'Maryland':1,'South Carolina':1,
+    'Mississippi':1,'Arkansas':1,'Louisiana':1,'Nevada':1,'Idaho':1,
+    'New Mexico':1,'Hawaii':1,
+}
+_STATE_FUNDING = {
+    'Washington':3,'Colorado':3,'Oregon':3,'California':3,'Minnesota':3,
+    'Maryland':3,'Massachusetts':3,'Connecticut':3,'New York':3,'Utah':3,
+    'Idaho':3,'Montana':3,'North Dakota':3,'South Dakota':3,
+    'Texas':2,'Florida':2,'Georgia':2,'North Carolina':2,'Virginia':2,
+    'Tennessee':2,'Indiana':2,'Ohio':2,'Wisconsin':2,'Michigan':2,
+    'Iowa':2,'Nebraska':2,'Kansas':2,'Missouri':2,'Oklahoma':2,
+    'Arkansas':2,'South Carolina':2,'New Jersey':2,'Delaware':2,
+    'Nevada':2,'Arizona':2,'Hawaii':2,'Alaska':2,'New Mexico':2,'Wyoming':2,
+    'Illinois':1,'Pennsylvania':1,'New Hampshire':1,'Vermont':1,
+    'Maine':1,'Rhode Island':1,'Kentucky':1,'West Virginia':1,
+    'Mississippi':1,'Louisiana':1,'Alabama':1,'District of Columbia':1,
+}
+
+def compute_pr_score(r):
+    """Compute 0-100 Partnership Readiness Score from a row dict."""
+    state = r.get('state','')
+    urb   = (r.get('urbanization','') or '').split(':')[0].strip()
+    ds    = fv(r,'distress_score') or 0
+    cr    = (fv(r,'closure_risk_score') or 0) * 100
+    dist_cat = r.get('distress_category','')
+
+    # Axis 1: State Policy (35 pts)
+    bea  = _BEA_OUTDOOR.get(state, 2.4)
+    cliff= _WICHE_CLIFF.get(state, -13)
+    ncls = _STATE_CLOSURES.get(state, 0)
+    s1a = 15 if bea>=4.0 else 13 if bea>=3.5 else 11 if bea>=3.0 else 9 if bea>=2.5 else 7 if bea>=2.0 else 5 if bea>=1.7 else 3
+    s1b = 12 if cliff<=-20 else 10 if cliff<=-15 else 8 if cliff<=-10 else 6 if cliff<=-5 else 4 if cliff<=0 else 2 if cliff<=5 else 0
+    s1c = 8 if ncls>=8 else 6 if ncls>=5 else 4 if ncls>=3 else 2 if ncls>=1 else 0
+    axis1 = s1a + s1b + s1c
+
+    # Axis 2: Funding (30 pts)
+    s2a = {'Rural':10,'Town':7,'Suburb':3,'City':0}.get(urb, 5)
+    ft  = _STATE_FUNDING.get(state, 2)
+    s2b = {3:10, 2:6, 1:2}.get(ft, 6)
+    s2c = 5  # accreditor unknown — neutral default
+    axis2 = s2a + s2b + s2c
+
+    # Axis 3: Governance/Urgency (35 pts)
+    combined = ds * 0.6 + cr * 0.4
+    s3a = 15 if combined>=60 else 12 if combined>=45 else 9 if combined>=30 else 6 if combined>=20 else 3 if combined>=10 else 1
+    urb_pts = {'Rural':12,'Town':9,'Suburb':5,'City':2}.get(urb, 6)
+    dist_bonus = {'Critical':2,'High':2,'Moderate':1}.get(dist_cat, 0)
+    s3b = min(12, urb_pts + dist_bonus)
+    s3c  = 0
+    if flag(r,'flag_negative_net_worth') or flag(r,'flag_990_negative_net_assets'): s3c += 3
+    if flag(r,'flag_enrollment_decline'): s3c += 2
+    if flag(r,'flag_operating_losses') or flag(r,'flag_990_operating_loss'): s3c += 2
+    if (fv(r,'closure_risk_score') or 0) > 0.3: s3c += 1
+    s3c = min(8, s3c)
+    axis3 = s3a + s3b + s3c
+
+    return round(min(100, max(0, axis1 + axis2 + axis3)))
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -235,8 +336,8 @@ def extract_ipeds_features(rows, osm_scores):
         'flag_land_potential',
         'flag_high_land_potential',
         'urban_city', 'urban_suburb', 'urban_town', 'urban_rural',
-        # ── HV FIT AXIS ──────────────────────────────────────────────
-        'osm_environment_score',     # 0-100 composite from osm_scorer
+        # ── PR FIT AXIS ──────────────────────────────────────────────
+        'pr_score',                  # 0-100 Partnership Readiness Score
         # ── SIZE CONTROLS ────────────────────────────────────────────
         'log_enrollment',
         'log_revenue',
@@ -274,7 +375,7 @@ def extract_ipeds_features(rows, osm_scores):
             1.0 if ug=='Suburb' else 0.0,
             1.0 if ug=='Town' else 0.0,
             1.0 if ug=='Rural' else 0.0,
-            osm_s,
+            compute_pr_score(r),
             safe_log(fv(r,'enrollment_2024')),
             safe_log(fv(r,'revenue_2024')),
             1.0 if reg=='Northeast' else 0.0,
@@ -289,7 +390,7 @@ def extract_ipeds_features(rows, osm_scores):
 
     continuous = ['distress_score','closure_risk_score','enrollment_score_ipeds',
                   'solvency_score_ipeds','operating_score_ipeds','enrollment_2yr_pct',
-                  'revenue_2yr_pct','log_acreage','osm_environment_score',
+                  'revenue_2yr_pct','log_acreage','pr_score',
                   'log_enrollment','log_revenue']
     for col in continuous:
         raw[col] = impute_median(raw[col])
@@ -321,8 +422,8 @@ def extract_990_features(rows, osm_scores):
         'log_assets',
         'log_ppe',
         'log_acreage',
-        # ── HV FIT ───────────────────────────────────────────────────
-        'osm_environment_score',
+        # ── PR FIT ───────────────────────────────────────────────────
+        'pr_score',
         # ── TYPE one-hots ────────────────────────────────────────────
         'type_religious','type_housing','type_recreation',
         'type_educational','type_youth','type_environmental',
@@ -358,7 +459,7 @@ def extract_990_features(rows, osm_scores):
             safe_log(fv(r,'assets_2024')),
             safe_log(fv(r,'plant_property_equipment')),
             safe_log(acres),
-            osm_s,
+            compute_pr_score(r),
             1.0 if it=='Religious Institution' else 0.0,
             1.0 if it=='Housing/Residential' else 0.0,
             1.0 if it=='Recreation/Camp' else 0.0,
@@ -382,7 +483,7 @@ def extract_990_features(rows, osm_scores):
     continuous = ['distress_score','solvency_score_990','operating_score_990',
                   'trend_score_990','red_flag_score_990','operating_margin',
                   'equity_ratio','log_revenue','log_assets','log_ppe',
-                  'log_acreage','osm_environment_score']
+                  'log_acreage','pr_score']
     for col in continuous:
         raw[col] = impute_median(raw[col])
 
@@ -404,27 +505,38 @@ def run_kmeans(matrix, k, seed=42):
 # ---------------------------------------------------------------------------
 # Cluster characterization helpers
 # ---------------------------------------------------------------------------
+def inst_urgency(r, source='IPEDS'):
+    """Per-institution urgency score (0-100) with good spread."""
+    if source == 'IPEDS':
+        ds  = fv(r,'distress_score') or 0
+        cr  = (fv(r,'closure_risk_score') or 0) * 100
+        es  = fv(r,'enrollment_score_ipeds') or 0
+        return round(min(100, ds*0.45 + cr*0.35 + es*0.20), 1)
+    else:
+        ds  = fv(r,'distress_score') or 0
+        sol = fv(r,'solvency_score_990') or 0
+        op  = fv(r,'operating_score_990') or 0
+        return round(min(100, ds*0.4 + sol*0.35 + op*0.25), 1)
+
+def inst_land(r):
+    """Per-institution land score (0-100)."""
+    acres = fv(r,'acreage_primary') or fv(r,'scraper_acres') or fv(r,'osm_acres') or 0
+    rural = 1.0 if flag(r,'flag_rural_suburban') else 0.0
+    land_p = 1.0 if flag(r,'flag_land_potential') else 0.0
+    hi_land = 1.0 if flag(r,'flag_high_land_potential') else 0.0
+    log_a = math.log1p(acres) / math.log1p(500) * 100 if acres > 0 else 0
+    return round(min(100, log_a*0.55 + rural*25 + land_p*12 + hi_land*8), 1)
+
 def axis_scores(rows, osm_scores, source='IPEDS'):
-    """Compute urgency / land / fit axis scores for a cluster."""
-    # URGENCY: composite of distress signals
-    ds  = med_of(rows, 'distress_score')
-    cr  = med_of(rows, 'closure_risk_score') or 0
-    pct_op_loss   = pct_of(rows, 'flag_operating_losses') if source=='IPEDS' else pct_of(rows, 'flag_990_operating_loss')
-    pct_neg       = pct_of(rows, 'flag_negative_net_worth') if source=='IPEDS' else pct_of(rows, 'flag_990_negative_net_assets')
-    pct_enr_dec   = pct_of(rows, 'flag_enrollment_decline') if source=='IPEDS' else 0
-    urgency = round(min(100, ds * 0.4 + cr * 3000 * 0.3 + pct_op_loss * 0.2 + pct_neg * 0.1), 1)
+    """Compute urgency / land / fit axis scores for a cluster (medians)."""
+    urgency_vals = [inst_urgency(r, source) for r in rows]
+    land_vals    = [inst_land(r) for r in rows]
+    urgency_vals.sort(); land_vals.sort()
+    urgency = round(urgency_vals[len(urgency_vals)//2], 1) if urgency_vals else 0
+    land    = round(land_vals[len(land_vals)//2], 1) if land_vals else 0
 
-    # LAND: acreage + rurality
-    acres = med_of(rows,'acreage_primary') or med_of(rows,'scraper_acres') or med_of(rows,'osm_acres') or 0
-    pct_rural = pct_of(rows, 'flag_rural_suburban') if source=='IPEDS' else 0
-    pct_land  = pct_of(rows, 'flag_land_potential') if source=='IPEDS' else 0
-    log_acres = math.log1p(acres) / math.log1p(500) * 100 if acres > 0 else 0
-    land = round(min(100, log_acres * 0.6 + pct_rural * 0.25 + pct_land * 0.15), 1)
-
-    # HV FIT: osm environment score median
-    osm_vals = [osm_scores.get(r.get('institution_name',''),{}).get('score')
-                for r in rows if osm_scores.get(r.get('institution_name',''),{}).get('score') is not None]
-    fit = round(sum(osm_vals)/len(osm_vals), 1) if osm_vals else None
+    pr_vals = [compute_pr_score(r) for r in rows]
+    fit = round(sum(pr_vals)/len(pr_vals), 1) if pr_vals else None
 
     return urgency, land, fit
 
@@ -639,11 +751,31 @@ def _make_cluster(cid, name, icon, color, desc, hv_angle, priority,
             'pct_revenue_decline':   pct_of(rows,'flag_990_revenue_decline_1yr'),
         })
 
+    # Build 3D scatter points (per-institution axis coords, max 300 per cluster)
+    # Sorted by distress descending so the most interesting ones are always included
+    sorted_rows = sorted(rows, key=lambda r: -(fv(r,'distress_score') or 0))[:300]
+    points = []
+    for r in sorted_rows:
+        u = inst_urgency(r, source)
+        l = inst_land(r)
+        f = compute_pr_score(r)
+        points.append({
+            'n': r.get('institution_name',''),        # name
+            'st': r.get('state',''),                  # state
+            'u': u,                                   # urgency
+            'l': l,                                   # land
+            'f': round(f, 1) if f is not None else None,  # fit
+            'd': round(fv(r,'distress_score') or 0, 1),   # distress
+            'cr': round(fv(r,'closure_risk_score') or 0, 3), # closure risk
+            'a': round(fv(r,'acreage_primary') or fv(r,'scraper_acres') or 0, 0), # acres
+        })
+
     return {
         'id': cid, 'name': name, 'icon': icon, 'color': color,
         'desc': desc, 'hv_angle': hv_angle, 'priority': priority,
         'count': len(rows), 'source': source, 'stats': stats,
         'rows': build_preview_rows(rows, source, osm_scores),
+        'points': points,
     }
 
 # ---------------------------------------------------------------------------
@@ -682,13 +814,13 @@ def build_html(ipeds_clusters, hb990_clusters, meta):
     ipeds_js = json.dumps(sanitize_for_json([{
         'id':c['id'],'name':c['name'],'icon':c['icon'],'color':c['color'],
         'desc':c['desc'],'hv_angle':c['hv_angle'],'priority':c['priority'],
-        'count':c['count'],'source':c['source'],'stats':c['stats'],'rows':c['rows'],
+        'count':c['count'],'source':c['source'],'stats':c['stats'],'rows':c['rows'],'points':c['points'],
     } for c in ipeds_clusters]), ensure_ascii=False)
 
     hb990_js = json.dumps(sanitize_for_json([{
         'id':c['id'],'name':c['name'],'icon':c['icon'],'color':c['color'],
         'desc':c['desc'],'hv_angle':c['hv_angle'],'priority':c['priority'],
-        'count':c['count'],'source':c['source'],'stats':c['stats'],'rows':c['rows'],
+        'count':c['count'],'source':c['source'],'stats':c['stats'],'rows':c['rows'],'points':c['points'],
     } for c in hb990_clusters]), ensure_ascii=False)
 
     total   = sum(c['count'] for c in ipeds_clusters) + sum(c['count'] for c in hb990_clusters)
@@ -843,6 +975,28 @@ tr:hover td{background:rgba(255,255,255,.015);}
 .filter-btn:hover:not(.active){color:var(--text);border-color:var(--text2);}
 .filter-count{font-family:var(--mono);font-size:10px;color:var(--text2);margin-left:4px;}
 @media(max-width:860px){.layout{grid-template-columns:1fr;}.detail{position:static;}.meth-grid,.meth-axes{grid-template-columns:1fr;}}
+#clustersView{display:block;}
+#scatterView{display:none;}
+.view-tabs{display:flex;gap:6px;margin-bottom:16px;}
+.view-tab{padding:6px 16px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;}
+.view-tab.active{background:rgba(108,92,231,.15);border-color:rgba(108,92,231,.4);color:var(--accent2);}
+.view-tab:hover:not(.active){color:var(--text);}
+.scatter-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.scatter-head{padding:14px 18px;border-bottom:1px solid var(--border);background:var(--surface2);display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.scatter-title{font-family:var(--mono);font-size:11px;color:var(--text2);font-weight:500;}
+.scatter-legend{display:flex;flex-wrap:wrap;gap:8px;flex:1;}
+.scatter-leg-item{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text2);cursor:pointer;}
+.scatter-leg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.scatter-canvas{width:100%;height:600px;display:block;cursor:grab;background:#0f1117;}
+.scatter-canvas:active{cursor:grabbing;}
+.scatter-tooltip{position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:11px;pointer-events:none;display:none;z-index:100;max-width:240px;box-shadow:0 4px 20px rgba(0,0,0,0.4);}
+.scatter-tooltip .tt-name{font-weight:600;margin-bottom:4px;}
+.scatter-tooltip .tt-row{font-family:var(--mono);font-size:9px;color:var(--text2);margin-top:2px;}
+.scatter-foot{padding:8px 18px;border-top:1px solid var(--border);display:flex;gap:16px;align-items:center;flex-wrap:wrap;}
+.scatter-hint{font-size:10px;color:var(--text2);}
+.scatter-controls{display:flex;gap:6px;margin-left:auto;}
+.scatter-ctrl-btn{padding:3px 10px;border-radius:4px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-family:var(--font);font-size:10px;cursor:pointer;}
+.scatter-ctrl-btn:hover{color:var(--text);}
 </style>
 </head>
 <body>
@@ -871,7 +1025,7 @@ tr:hover td{background:rgba(255,255,255,.015);}
           <p>How much underleveraged physical asset is here? Combines log-acreage, land potential flags, rurality, and urbanization. High land score = meaningful real estate opportunity relative to institutional size.</p>
         </div>
         <div class="meth-axis">
-          <div class="meth-axis-title fit">HV Fit Axis</div>
+          <div class="meth-axis-title fit">PR Fit Axis</div>
           <p>Does the surrounding environment match HV's outdoor/wellness programming thesis? Driven by the OSM Environment Score (0\u2013100) \u2014 a composite of named natural feature tiers, category diversity, feature density, and proximity.</p>
         </div>
       </div>
@@ -894,7 +1048,7 @@ tr:hover td{background:rgba(255,255,255,.015);}
         <div class="meth-card c990">
           <div class="meth-ct">990 \u2014 Nonprofits (K=5)</div>
           <p>All 6,999 nonprofits clustered together with institution type as a one-hot feature (not a split criterion). 990 financials use IRS Form 990 reporting: plant/property/equipment as physical asset proxy, equity ratio, and 990-specific distress subdomain scores.</p>
-          <p><b>OSM Environment Score</b> is included as a feature where scraped, and imputed at median otherwise. Currently """ + str(osm_scraped) + """ institutions scraped (\u2248""" + str(osm_pct) + """% of total).</p>
+          <p><b>Partnership Readiness Score</b> is included as the HV Fit axis, and imputed at median otherwise. Currently """ + str(osm_scraped) + """ institutions scraped (\u2248""" + str(osm_pct) + """% of total).</p>
           <div class="meth-feats">
             <span class="meth-feat">distress_score</span><span class="meth-feat">solvency/operating/trend scores</span>
             <span class="meth-feat">red_flag_score_990</span><span class="meth-feat">equity_ratio</span>
@@ -922,6 +1076,12 @@ tr:hover td{background:rgba(255,255,255,.015);}
     </div>
   </div>
 
+  <div class="view-tabs">
+    <div class="view-tab active" id="viewTabClusters">Clusters</div>
+    <div class="view-tab" id="viewTab3D">3D Opportunity Space</div>
+  </div>
+
+  <div id="clustersView">
   <div class="page-eyebrow">Phase II \u00b7 Machine Learning</div>
   <div class="page-title">Opportunity Clusters</div>
   <div class="page-sub">""" + f"{total:,}" + """ institutions segmented across three axes: <b>urgency</b> (distress trajectory), <b>land</b> (physical asset potential), and <b>HV fit</b> (environment quality score). Institution type is a label, not a clustering feature.</div>
@@ -960,10 +1120,27 @@ tr:hover td{background:rgba(255,255,255,.015);}
         <div class="d-empty-sub">Click any card to explore its institutions</div>
       </div>
     </div>
+  </div><!-- /clustersView -->
+
+  <div id="scatterView" style="display:none">
+    <div class="scatter-wrap" style="position:relative">
+      <div class="scatter-head">
+        <div class="scatter-title">URGENCY × LAND × PR FIT — each dot is one institution</div>
+        <div class="scatter-legend" id="scatterLegend"></div>
+      </div>
+      <canvas id="scatterCanvas" class="scatter-canvas" style="width:100%;height:600px;display:block;"></canvas>
+      <div class="scatter-tooltip" id="scatterTooltip"></div>
+      <div class="scatter-foot">
+        <div class="scatter-hint">Drag to rotate · Scroll to zoom · Hover for details · Grey = OSM not yet scraped</div>
+        <div class="scatter-controls">
+          <button class="scatter-ctrl-btn" id="scatterReset">Reset View</button>
+          <button class="scatter-ctrl-btn" id="btnIPEDS3D">IPEDS</button>
+          <button class="scatter-ctrl-btn" id="btn9903D">990</button>
+        </div>
+      </div>
+    </div>
   </div>
-</div>
-<script>
-var IPEDS_DATA=""")
+</div>\n</div>\n<script>\nvar IPEDS_DATA=""")
     parts.append(ipeds_js)
     parts.append(";var HB990_DATA=")
     parts.append(hb990_js)
@@ -994,7 +1171,7 @@ function renderCards(){
     html+='<div class="axis-bars">';
     html+='<div class="axis-bar-wrap"><div class="axis-bar-label">Urgency</div><div class="axis-bar-track"><div class="axis-bar-fill" style="width:'+Math.min(s.urgency_score||0,100)+'%;background:'+urgColor+'"></div></div></div>';
     html+='<div class="axis-bar-wrap"><div class="axis-bar-label">Land</div><div class="axis-bar-track"><div class="axis-bar-fill" style="width:'+Math.min(s.land_score||0,100)+'%;background:'+landColor+'"></div></div></div>';
-    html+='<div class="axis-bar-wrap"><div class="axis-bar-label">HV Fit</div><div class="axis-bar-track"><div class="axis-bar-fill" style="width:'+Math.min(s.fit_score||0,100)+'%;background:'+fitColor+'"></div></div></div>';
+    html+='<div class="axis-bar-wrap"><div class="axis-bar-label">PR Fit</div><div class="axis-bar-track"><div class="axis-bar-fill" style="width:'+Math.min(s.fit_score||0,100)+'%;background:'+fitColor+'"></div></div></div>';
     html+='</div></div>';
   }
   if(!html)html='<div style="padding:20px;font-size:11px;color:var(--text2)">No clusters found.</div>';
@@ -1004,6 +1181,258 @@ function selectCluster(cid){
   activeId=cid;searchQ='';sortCol='distress';sortAsc=false;filterType='';filterAcreage='';
   var fs=document.getElementById('filterType');if(fs)fs.value='';
   var fa=document.getElementById('filterAcreage');if(fa)fa.value='';
+
+// ── View tab switching ────────────────────────────────────────────────────
+document.getElementById('viewTabClusters').addEventListener('click', function() {
+  document.getElementById('clustersView').style.display = 'block';
+  document.getElementById('scatterView').style.display = 'none';
+  document.getElementById('viewTabClusters').classList.add('active');
+  document.getElementById('viewTab3D').classList.remove('active');
+});
+document.getElementById('viewTab3D').addEventListener('click', function() {
+  try {
+    document.getElementById('clustersView').style.display = 'none';
+    document.getElementById('scatterView').style.display = 'block';
+    document.getElementById('viewTabClusters').classList.remove('active');
+    document.getElementById('viewTab3D').classList.add('active');
+    initScatter();
+  } catch(err) { console.error('3D tab error:', err); }
+});
+document.getElementById('btn9903D').addEventListener('click', function() { scatter3DSrc='990'; buildPoints(); drawScene(); buildLegend(); });
+
+// ── 3D Scatter Engine ─────────────────────────────────────────────────────
+var scatter3DSrc = 'ipeds';
+var scatterPts   = [];  // {x,y,z,color,name,state,d,cr,a,hasOSM}
+var camera = { rotX: 0.4, rotY: -0.6, zoom: 1.0, tx: 0, ty: 0 };
+var dragging = false, lastMX = 0, lastMY = 0;
+var scatterInited = false;
+
+function initScatter() {
+  if (scatterInited) return;
+  scatterInited = true;
+  // Force scatterView visible before measuring canvas
+  var sv = document.getElementById('scatterView');
+  if (sv) sv.style.display = 'block';
+  buildPoints();
+  buildLegend();
+  setupScatterEvents();
+  // Give layout time to settle then draw
+  setTimeout(function() { drawScene(); }, 50);
+}
+function buildPoints() {
+  var cl = scatter3DSrc === 'ipeds' ? IPEDS_DATA : HB990_DATA;
+  scatterPts = [];
+  for (var ci = 0; ci < cl.length; ci++) {
+    var c = cl[ci];
+    var pts = c.points || [];
+    for (var pi = 0; pi < pts.length; pi++) {
+      var p = pts[pi];
+      var hasOSM = (p.f !== null && p.f !== undefined);
+      // Normalize to 0-1 range for rendering
+      var x = (p.u || 0) / 100;
+      var y = (p.l || 0) / 100;
+      var z = hasOSM ? (p.f / 100) : 0.45;  // unscraped at midpoint
+      scatterPts.push({
+        x: x, y: y, z: z,
+        color: hasOSM ? c.color : '#3d4f6e',
+        name: p.n, state: p.st,
+        u: p.u, l: p.l, f: p.f,
+        d: p.d, cr: p.cr, a: p.a,
+        hasOSM: hasOSM,
+        cluster: c.name,
+      });
+    }
+  }
+}
+
+function buildLegend() {
+  var cl = scatter3DSrc === 'ipeds' ? IPEDS_DATA : HB990_DATA;
+  var html = '';
+  for (var i = 0; i < cl.length; i++) {
+    html += '<div class="scatter-leg-item">'
+      + '<div class="scatter-leg-dot" style="background:' + cl[i].color + '"></div>'
+      + cl[i].name
+      + '</div>';
+  }
+  html += '<div class="scatter-leg-item">'
+    + '<div class="scatter-leg-dot" style="background:#3d4f6e"></div>'
+    + 'Not yet scraped'
+    + '</div>';
+  document.getElementById('scatterLegend').innerHTML = html;
+}
+
+function project(x, y, z) {
+  // Rotate around Y axis then X axis
+  var cosY = Math.cos(camera.rotY), sinY = Math.sin(camera.rotY);
+  var cosX = Math.cos(camera.rotX), sinX = Math.sin(camera.rotX);
+  // Center around 0.5,0.5,0.5
+  var cx = x - 0.5, cy = y - 0.5, cz = z - 0.5;
+  // Rotate Y
+  var rx = cx * cosY - cz * sinY;
+  var rz = cx * sinY + cz * cosY;
+  // Rotate X
+  var ry = cy * cosX - rz * sinX;
+  var rz2 = cy * sinX + rz * cosX;
+  // Perspective
+  var fov = 2.5 * camera.zoom;
+  var pz = rz2 + 2.0;
+  var sx = rx / pz * fov;
+  var sy = ry / pz * fov;
+  return { sx: sx, sy: sy, depth: pz };
+}
+
+function drawScene() {
+  var canvas = document.getElementById('scatterCanvas');
+  if (!canvas) return;
+  var W = Math.max(canvas.offsetWidth || 0, canvas.parentElement ? canvas.parentElement.offsetWidth : 0, 600);
+  var H = 600;
+  canvas.width = W; canvas.height = H;
+  var ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#0f1117';
+  ctx.fillRect(0, 0, W, H);
+
+  // Draw axis lines
+  var cx = W/2 + camera.tx, cy = H/2 + camera.ty;
+  var axisEnds = [
+    [[0.5,0.5,0.5],[1,0.5,0.5],'#ff6b35','Urgency'],
+    [[0.5,0.5,0.5],[0.5,1,0.5],'#00b894','Land'],
+    [[0.5,0.5,0.5],[0.5,0.5,1],'#a29bfe','PR Fit'],
+  ];
+  axisEnds.forEach(function(ax) {
+    var p0 = project(ax[0][0],ax[0][1],ax[0][2]);
+    var p1 = project(ax[1][0],ax[1][1],ax[1][2]);
+    ctx.strokeStyle = ax[2];
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(cx + p0.sx*W*0.5, cy - p0.sy*H*0.5);
+    ctx.lineTo(cx + p1.sx*W*0.5, cy - p1.sy*H*0.5);
+    ctx.stroke();
+    // Label
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = ax[2];
+    ctx.font = '10px JetBrains Mono, monospace';
+    ctx.fillText(ax[3], cx + p1.sx*W*0.5 + 4, cy - p1.sy*H*0.5 + 4);
+    ctx.globalAlpha = 1;
+  });
+
+  // Sort by depth for painter's algorithm
+  var projected = scatterPts.map(function(p) {
+    var proj = project(p.x, p.y, p.z);
+    return { p: p, proj: proj };
+  }).sort(function(a,b) { return b.proj.depth - a.proj.depth; });
+
+  // Draw points
+  projected.forEach(function(item) {
+    var proj = item.proj;
+    var px = cx + proj.sx * W * 0.5;
+    var py = cy - proj.sy * H * 0.5;
+    var r = item.p.hasOSM ? 3.5 : 2.5;
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI*2);
+    ctx.fillStyle = item.p.color;
+    ctx.globalAlpha = item.p.hasOSM ? 0.85 : 0.35;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  });
+
+  // Axis origin labels
+  var labels = [
+    {pos:[1,0.5,0.5], text:'100', color:'#ff6b35'},
+    {pos:[0.5,1,0.5], text:'100', color:'#00b894'},
+    {pos:[0.5,0.5,1], text:'100', color:'#a29bfe'},
+    {pos:[0,0.5,0.5], text:'0', color:'#3d4f6e'},
+    {pos:[0.5,0,0.5], text:'0', color:'#3d4f6e'},
+    {pos:[0.5,0.5,0], text:'0', color:'#3d4f6e'},
+  ];
+  labels.forEach(function(lb) {
+    var proj = project(lb.pos[0],lb.pos[1],lb.pos[2]);
+    ctx.fillStyle = lb.color;
+    ctx.globalAlpha = 0.5;
+    ctx.font = '9px JetBrains Mono, monospace';
+    ctx.fillText(lb.text, cx + proj.sx*W*0.5 + 3, cy - proj.sy*H*0.5 + 3);
+    ctx.globalAlpha = 1;
+  });
+}
+
+function setupScatterEvents() {
+  var canvas = document.getElementById('scatterCanvas');
+  var tooltip = document.getElementById('scatterTooltip');
+
+  canvas.addEventListener('mousedown', function(e) {
+    dragging = true; lastMX = e.clientX; lastMY = e.clientY;
+  });
+  window.addEventListener('mouseup', function() { dragging = false; });
+  window.addEventListener('mousemove', function(e) {
+    if (dragging) {
+      camera.rotY += (e.clientX - lastMX) * 0.008;
+      camera.rotX += (e.clientY - lastMY) * 0.008;
+      lastMX = e.clientX; lastMY = e.clientY;
+      drawScene();
+    }
+    // Hover tooltip
+    var rect = canvas.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var W = canvas.width, H = canvas.height;
+    var cx = W/2 + camera.tx, cy = H/2 + camera.ty;
+    var closest = null, closestDist = 14;
+    scatterPts.forEach(function(p) {
+      var proj = project(p.x, p.y, p.z);
+      var px = cx + proj.sx*W*0.5;
+      var py = cy - proj.sy*H*0.5;
+      var dist = Math.sqrt((mx-px)*(mx-px) + (my-py)*(my-py));
+      if (dist < closestDist) { closest = p; closestDist = dist; }
+    });
+    if (closest) {
+      tooltip.style.display = 'block';
+      tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
+      tooltip.style.top = (e.clientY - rect.top - 10) + 'px';
+      var fitStr = closest.hasOSM ? closest.f.toFixed(1) : 'Not scraped';
+      tooltip.innerHTML = '<div class="tt-name">' + esc(closest.name) + '</div>'
+        + '<div class="tt-row">' + esc(closest.state) + ' · ' + esc(closest.cluster) + '</div>'
+        + '<div class="tt-row">Urgency <b>' + closest.u + '</b> · Land <b>' + closest.l + '</b> · Fit <b>' + fitStr + '</b></div>'
+        + '<div class="tt-row">Distress <b>' + closest.d + '</b> · Closure Risk <b>' + (closest.cr*100).toFixed(1) + '%</b></div>'
+        + (closest.a > 0 ? '<div class="tt-row">Acreage <b>' + closest.a + ' ac</b></div>' : '');
+    } else {
+      tooltip.style.display = 'none';
+    }
+  });
+  canvas.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    camera.zoom *= e.deltaY > 0 ? 0.92 : 1.08;
+    camera.zoom = Math.max(0.3, Math.min(4.0, camera.zoom));
+    drawScene();
+  }, {passive: false});
+  // Touch support
+  var lastTouchDist = 0;
+  canvas.addEventListener('touchstart', function(e) {
+    if (e.touches.length === 1) { dragging = true; lastMX = e.touches[0].clientX; lastMY = e.touches[0].clientY; }
+    if (e.touches.length === 2) { lastTouchDist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY); }
+    e.preventDefault();
+  }, {passive:false});
+  canvas.addEventListener('touchmove', function(e) {
+    if (e.touches.length === 1 && dragging) {
+      camera.rotY += (e.touches[0].clientX - lastMX) * 0.008;
+      camera.rotX += (e.touches[0].clientY - lastMY) * 0.008;
+      lastMX = e.touches[0].clientX; lastMY = e.touches[0].clientY;
+      drawScene();
+    }
+    if (e.touches.length === 2) {
+      var d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+      camera.zoom *= d / lastTouchDist;
+      camera.zoom = Math.max(0.3, Math.min(4.0, camera.zoom));
+      lastTouchDist = d; drawScene();
+    }
+    e.preventDefault();
+  }, {passive:false});
+  canvas.addEventListener('touchend', function() { dragging = false; });
+}
+
+function resetCamera() {
+  camera = { rotX: 0.4, rotY: -0.6, zoom: 1.0, tx: 0, ty: 0 };
+}
+
   renderCards();
   var cl=getClusters(),c=null;
   for(var i=0;i<cl.length;i++){if(cl[i].id===cid){c=cl[i];break;}}
@@ -1019,7 +1448,7 @@ function renderDetail(c){
   var axisHtml='<div class="axis-strip">'
     +'<div class="axis-cell"><span class="axis-val" style="color:'+urgColor+'">'+s.urgency_score+'</span><div class="axis-lbl">Urgency</div><div class="axis-sub">Distress trajectory</div></div>'
     +'<div class="axis-cell"><span class="axis-val" style="color:'+landColor+'">'+s.land_score+'</span><div class="axis-lbl">Land</div><div class="axis-sub">Physical asset potential</div></div>'
-    +'<div class="axis-cell"><span class="axis-val" style="color:'+fitColor+'">'+fitLabel+'</span><div class="axis-lbl">HV Fit</div><div class="axis-sub">Env. quality score</div></div>'
+    +'<div class="axis-cell"><span class="axis-val" style="color:'+fitColor+'">'+fitLabel+'</span><div class="axis-lbl">PR Fit</div><div class="axis-sub">Partnership readiness</div></div>'
     +'</div>';
   var statCols,statHtml='';
   if(isIPEDS){
