@@ -1005,7 +1005,7 @@ tr:hover td{background:rgba(255,255,255,.015);}
   <div class="nav-sep"></div>
   <div class="nav-sub">Opportunity Clusters</div>
   <div class="nav-spacer"></div>
-  <a href="index.html" class="nav-back">\u2190 Map</a>
+  <a href="index.html" class="nav-back">\u2190 Map</a>\n  <a href="scatter3d.html" class="nav-back">3D Scatter \u2197</a>
 </nav>
 <div class="page">
   <div class="methodology">
