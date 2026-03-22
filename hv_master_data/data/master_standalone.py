@@ -288,26 +288,12 @@ def build_osm_lookup(osm_path, urb_lookup=None):
                                    'radius_bonus': None, 'context_mult': None,
                                    'breakdown': [], 'top_features': [],
                                    'has_osm_data': bool(by_cat)}
-            # Trim by_category to top 3 features per category, max 2 names each
-            # Keeps land panel readable and cuts embed size ~80%
-            by_cat_trim = {}
-            for cat, feats in by_cat.items():
-                trimmed_feats = []
-                for feat in feats[:3]:
-                    d = feat.get('display', '')
-                    # Keep first 2 named items only
-                    parts = d.split(',')
-                    d = ', '.join(p.strip() for p in parts[:2])
-                    if len(parts) > 2:
-                        d += f' +{len(parts)-2} more'
-                    trimmed_feats.append({'label': feat.get('label',''), 'display': d})
-                by_cat_trim[cat] = trimmed_feats
             lookup[name] = {
                 'categories':  cats_raw,
                 'count':       _count,
                 'radius_miles': _radius,
                 'queried_at':  queried,
-                'by_category': by_cat_trim,
+                'by_category': by_cat,
                 'env_score':   _env_score,
             }
 
@@ -467,6 +453,21 @@ def main():
     else:
         print(f'\n  ℹ clusters.py not found — skipping cluster generation')
         print(f'    Place clusters.py at: {clusters_script}')
+
+    # ── Generate scatter3d.html from clusters.html ────────────────────────
+    scatter_script = os.path.join(os.path.dirname(__file__), 'build_scatter.py')
+    if not os.path.exists(scatter_script):
+        scatter_script = 'hv_master_data/data/build_scatter.py'
+    if os.path.exists(scatter_script) and os.path.exists('clusters.html'):
+        print('\n  Running scatter3d generator...')
+        result = subprocess.run(
+            [sys.executable, scatter_script],
+            capture_output=False
+        )
+        if result.returncode != 0:
+            print('  ⚠ scatter3d generation failed — skipping')
+    else:
+        print('\n  ℹ build_scatter.py or clusters.html not found — skipping scatter3d')
 
     print('=' * 70)
 
