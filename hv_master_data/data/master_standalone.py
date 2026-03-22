@@ -288,12 +288,26 @@ def build_osm_lookup(osm_path, urb_lookup=None):
                                    'radius_bonus': None, 'context_mult': None,
                                    'breakdown': [], 'top_features': [],
                                    'has_osm_data': bool(by_cat)}
+            # Trim by_category to top 3 features per category, max 2 names each
+            # Keeps land panel readable and cuts embed size ~80%
+            by_cat_trim = {}
+            for cat, feats in by_cat.items():
+                trimmed_feats = []
+                for feat in feats[:3]:
+                    d = feat.get('display', '')
+                    # Keep first 2 named items only
+                    parts = d.split(',')
+                    d = ', '.join(p.strip() for p in parts[:2])
+                    if len(parts) > 2:
+                        d += f' +{len(parts)-2} more'
+                    trimmed_feats.append({'label': feat.get('label',''), 'display': d})
+                by_cat_trim[cat] = trimmed_feats
             lookup[name] = {
                 'categories':  cats_raw,
                 'count':       _count,
                 'radius_miles': _radius,
                 'queried_at':  queried,
-                'by_category': by_cat,
+                'by_category': by_cat_trim,
                 'env_score':   _env_score,
             }
 
@@ -454,21 +468,6 @@ def main():
         print(f'\n  ℹ clusters.py not found — skipping cluster generation')
         print(f'    Place clusters.py at: {clusters_script}')
 
-
-    # ── Run summary generator ────────────────────────────────────────────────────────────────────
-    summary_script = os.path.join(os.path.dirname(__file__), 'summary_generator.py')
-    if not os.path.exists(summary_script):
-        summary_script = 'hv_master_data/data/summary_generator.py'
-    if os.path.exists(summary_script):
-        print('  Running summary generator...')
-        import subprocess as _sp
-        _sr = _sp.run([sys.executable, summary_script,
-                       '--master', MASTER_FILE, '--out', 'summary.html'],
-                      capture_output=False)
-        if _sr.returncode != 0:
-            print('  ⚠ Summary generator failed — skipping (summary.html not updated)')
-    else:
-        print(f'\n  ℹ summary_generator.py not found — skipping summary generation')
     print('=' * 70)
 
 
