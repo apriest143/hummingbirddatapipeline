@@ -305,6 +305,11 @@
                 <div class="stat-card closed-card"><div class="stat-val" id="sClosed">0</div><div class="stat-label">Likely Closed</div></div>
             </div>
         </div>
+        <div class="sidebar-footer" style="padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;">
+            <a href="clusters.html" target="_blank" style="flex:1;text-align:center;padding:7px 6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:11px;font-weight:600;text-decoration:none;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--text)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">&#128202; Clusters</a>
+            <a href="summary.html" target="_blank" style="flex:1;text-align:center;padding:7px 6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:11px;font-weight:600;text-decoration:none;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--text)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">&#128203; Summary</a>
+            <a href="scatter3d.html" target="_blank" style="flex:1;text-align:center;padding:7px 6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:11px;font-weight:600;text-decoration:none;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--text)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">&#10022; 3D Scatter</a>
+        </div>
     </div>
     <button id="sidebar-toggle" onclick="toggleSidebar()">◀</button>
     <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -749,19 +754,15 @@
 
         // Property
         var prop='<div class="psection"><div class="psection-title" onclick="toggleSection(this)">\uD83C\uDFD7 Property & Land <span style="float:right;font-size:8px">\u25BC</span></div><div><div class="pgrid">';
-        var hasScraper=v(r.scraper_acres),hasOSM=v(r.osm_acres),hasHIFLD=v(r.hifld_acres),hasPrimary=v(r.acreage_primary),is990=r.data_source==='Hummingbird_990';
-        if((hasPrimary||hasHIFLD||hasScraper||hasOSM)&&!is990){
-            var pSrc=r.acreage_primary_source||'';
-            var pVal=hasPrimary?parseFloat(r.acreage_primary).toLocaleString(undefined,{maximumFractionDigits:1}):'--';
-            var pConf=pSrc==='HIFLD'?'POLYGON':pSrc==='OSM'?r.osm_confidence:r.scraper_confidence;
-            var pCol=pSrc==='HIFLD'?'var(--accent2)':pConf==='HIGH'?'var(--low)':pConf==='MEDIUM'?'var(--elevated)':'var(--text2)';
-            var aHtml='<div class="pgrid-val">'+pVal+'</div><div style="font-size:9px;color:'+pCol+';margin-top:2px">'+pSrc+' · '+pConf+'</div>';
-            var altSources=[];
-            if(hasHIFLD&&pSrc!=='HIFLD'){altSources.push('HIFLD: '+parseFloat(r.hifld_acres).toLocaleString(undefined,{maximumFractionDigits:1})+' ac · polygon');}
-            if(hasScraper&&pSrc!=='scraper'){altSources.push('Scraper: '+parseFloat(r.scraper_acres).toLocaleString(undefined,{maximumFractionDigits:1})+' ac · '+(r.scraper_confidence||'?'));}
-            if(hasOSM&&pSrc!=='OSM'){altSources.push('OSM: '+parseFloat(r.osm_acres).toLocaleString(undefined,{maximumFractionDigits:1})+' ac · '+(r.osm_confidence||'?'));}
-            if(altSources.length>0){aHtml+='<div style="font-size:9px;color:var(--text2);margin-top:3px">'+altSources.join('<br>')+'</div>';}
-            if(v(r.acreage_conflict_flag))aHtml+='<div style="font-size:9px;color:var(--high);margin-top:3px">⚠ Sources conflict · review audit file</div>';
+        var hasScraper=v(r.scraper_acres),hasOSM=v(r.osm_acres),hasPrimary=v(r.acreage_primary),is990=r.data_source==='Hummingbird_990';
+        if(hasPrimary&&!is990){
+            var pVal=parseFloat(r.acreage_primary).toLocaleString(undefined,{maximumFractionDigits:1});
+            var pSrc=r.acreage_primary_source==='OSM'?'OSM':'Scraper';
+            var pConf=r.acreage_primary_source==='OSM'?r.osm_confidence:r.scraper_confidence;
+            var pCol=pConf==='HIGH'?'var(--low)':pConf==='MEDIUM'?'var(--elevated)':'var(--text2)';
+            var aHtml='<div class="pgrid-val">'+pVal+'</div><div style="font-size:9px;color:'+pCol+';margin-top:2px">'+pSrc+' \u00b7 '+pConf+'</div>';
+            if(hasScraper&&hasOSM){var secSrc=r.acreage_primary_source==='OSM'?'Scraper':'OSM';var secVal=r.acreage_primary_source==='OSM'?parseFloat(r.scraper_acres).toLocaleString(undefined,{maximumFractionDigits:1}):parseFloat(r.osm_acres).toLocaleString(undefined,{maximumFractionDigits:1});var secConf=r.acreage_primary_source==='OSM'?r.scraper_confidence:r.osm_confidence;aHtml+='<div style="font-size:9px;color:var(--text2);margin-top:3px">Alt ('+secSrc+'): '+secVal+' ac \u00b7 '+secConf+'</div>';}
+            if(v(r.acreage_conflict_flag))aHtml+='<div style="font-size:9px;color:var(--high);margin-top:3px">\u26a0 '+r.acreage_conflict_flag+'</div>';
             if(v(r.scraper_source)){var ss=r.scraper_source.length>50?r.scraper_source.substring(0,50)+'\u2026':r.scraper_source;var ssH=r.scraper_source.startsWith('http')?'<a href="'+r.scraper_source+'" target="_blank" style="color:var(--accent2);text-decoration:none">'+ss+'</a>':ss;aHtml+='<div style="font-size:9px;color:var(--text2);margin-top:3px">Source: '+ssH+'</div>';}
             prop+=gi('Acres',aHtml);
         }else if(is990&&(hasScraper||hasOSM)){
