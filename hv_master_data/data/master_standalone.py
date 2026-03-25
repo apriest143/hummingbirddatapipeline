@@ -86,6 +86,7 @@ KEEP_COLUMNS = [
 
     # Property & Land
     'plant_property_equipment', 'land_book_value',
+    'hifld_acres', 'hifld_match_method',
     'scraper_acres', 'osm_acres', 'acreage_primary', 'acreage_primary_source',
     'acreage_conflict_flag', 'scraper_confidence', 'osm_confidence',
     'scraper_source', 'osm_feature_name',
@@ -453,21 +454,6 @@ def main():
     else:
         print(f'\n  ℹ clusters.py not found — skipping cluster generation')
         print(f'    Place clusters.py at: {clusters_script}')
-
-    # ── Generate scatter3d.html from clusters.html ────────────────────────
-    scatter_script = os.path.join(os.path.dirname(__file__), 'build_scatter.py')
-    if not os.path.exists(scatter_script):
-        scatter_script = 'hv_master_data/data/build_scatter.py'
-    if os.path.exists(scatter_script) and os.path.exists('clusters.html'):
-        print('\n  Running scatter3d generator...')
-        result = subprocess.run(
-            [sys.executable, scatter_script],
-            capture_output=False
-        )
-        if result.returncode != 0:
-            print('  ⚠ scatter3d generation failed — skipping')
-    else:
-        print('\n  ℹ build_scatter.py or clusters.html not found — skipping scatter3d')
 
     print('=' * 70)
 

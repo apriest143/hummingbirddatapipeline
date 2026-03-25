@@ -34,8 +34,6 @@
         .sidebar-header { padding: 20px; border-bottom: 1px solid var(--border); background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%); }
         .sidebar-header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; background: linear-gradient(135deg, var(--accent2), #74b9ff); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
         .sidebar-header p { font-size: 11px; color: var(--text2); margin-top: 4px; }
-        .clusters-btn { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding: 7px 12px; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.25); border-radius: 6px; color: #74b9ff; font-family: var(--font); font-size: 11px; font-weight: 600; cursor: pointer; text-decoration: none; transition: all 0.15s; width: 100%; justify-content: center; }
-        .clusters-btn:hover { background: rgba(59,130,246,0.18); border-color: rgba(59,130,246,0.5); color: #93c5fd; }
         .sidebar-body { flex: 1; overflow-y: auto; padding: 16px; }
         .sidebar-body::-webkit-scrollbar { width: 4px; }
         .sidebar-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
@@ -79,41 +77,6 @@
         .toggle-switch input:checked + .slider { background: var(--accent); }
         .toggle-switch input:checked + .slider:before { transform: translateX(14px); }
 
-        /* ── Shortlist ─────────────────────────────────── */
-        .shortlist-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
-        .sl-tab { flex: 1; padding: 8px 6px; text-align: center; cursor: pointer; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--text2); transition: all 0.2s; }
-        .sl-tab.active { background: rgba(255,193,7,0.15); color: #ffc107; border-color: rgba(255,193,7,0.4); }
-        .sl-tab .sl-count { display: inline-block; background: rgba(255,193,7,0.2); color: #ffc107; border-radius: 10px; padding: 0 5px; font-size: 9px; margin-left: 4px; min-width: 16px; }
-        .sl-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; max-height: 300px; overflow-y: auto; }
-        .sl-list::-webkit-scrollbar { width: 3px; }
-        .sl-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-        .sl-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: var(--bg); border-radius: 6px; border-left: 2px solid rgba(255,193,7,0.5); font-size: 11px; cursor: pointer; transition: border-color 0.15s; }
-        .sl-item:hover { border-left-color: #ffc107; }
-        .sl-item-name { flex: 1; font-weight: 600; line-height: 1.3; }
-        .sl-item-meta { font-size: 9px; color: var(--text2); margin-top: 1px; }
-        .sl-item-remove { color: var(--text2); cursor: pointer; font-size: 12px; padding: 2px 4px; border-radius: 3px; flex-shrink: 0; }
-        .sl-item-remove:hover { color: #ff4757; background: rgba(255,71,87,0.1); }
-        .sl-empty { text-align: center; padding: 24px 12px; color: var(--text2); font-size: 11px; line-height: 1.6; }
-        .sl-empty-icon { font-size: 24px; margin-bottom: 8px; }
-        .sl-actions { display: flex; gap: 6px; margin-top: 10px; }
-        .popup-btn-group { position: absolute; top: 12px; right: 12px; display: flex; gap: 4px; z-index: 10; }
-        .popup-star-btn, .popup-land-btn, .popup-news-btn { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: var(--text2); cursor: pointer; font-size: 13px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; padding: 0; }
-        .popup-star-btn:hover { background: rgba(255,193,7,0.15); color: #ffc107; border-color: rgba(255,193,7,0.4); }
-        .popup-star-btn.starred { color: #ffc107; border-color: rgba(255,193,7,0.4); background: rgba(255,193,7,0.12); }
-        .popup-land-btn:hover { background: rgba(16,185,129,0.15); color: #10b981; border-color: rgba(16,185,129,0.4); }
-        .popup-land-btn.has-data { color: #10b981; border-color: rgba(16,185,129,0.35); background: rgba(16,185,129,0.08); }
-        .popup-land-btn.no-data { opacity: 0.35; cursor: default; }
-        /* ── Collapsible filter section ────────────────── */
-        .filter-collapse-hdr { display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 6px 0; }
-        .filter-collapse-hdr:hover .section-label { color: var(--text); }
-        .filter-collapse-arrow { font-size: 9px; color: var(--text2); transition: transform 0.2s; }
-        .filter-collapse-hdr.open .filter-collapse-arrow { transform: rotate(90deg); }
-        .filter-collapse-body { display: none; }
-        .filter-collapse-body.open { display: block; }
-        /* ── OSM filter pills ──────────────────────────── */
-        .osm-filter-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-        .osm-pill { padding: 3px 8px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text2); font-size: 9px; font-weight: 600; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
-        .osm-pill.active { background: rgba(16,185,129,0.15); color: #10b981; border-color: rgba(16,185,129,0.4); }
         .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding: 12px; background: var(--bg); border-radius: 8px; margin-top: 12px; }
         .stat-card { padding: 10px; background: var(--surface2); border-radius: 6px; border-left: 3px solid var(--border); }
         .stat-card.critical { border-left-color: var(--critical); }
@@ -266,59 +229,15 @@
         .pp-error { font-size: 11px; color: var(--text2); padding: 16px 0; text-align: center; line-height: 1.6; }
         .pp-link { font-size: 10px; color: var(--accent2); text-decoration: none; }
         .pp-link:hover { text-decoration: underline; }
+        /* ── News button in popup head ───────────────────── */
+        .popup-news-btn { position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: var(--text2); cursor: pointer; font-size: 13px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; z-index: 10; }
+        .popup-news-btn:hover { background: rgba(255,255,255,0.13); color: var(--text); border-color: rgba(255,255,255,0.3); }
         .popup-content { padding: 12px; flex: 1; overflow-y: auto; min-height: 0; }
         .popup-content .spark-chart-wrap { overflow: visible; }
-        /* ── Land panel ─────────────────────────────────── */
-        #land-panel { position: absolute; top: 0; right: 0; z-index: 1001; width: 360px; height: 100vh; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; transform: translateX(360px); transition: transform 0.3s ease; }
-        #land-panel.open { transform: translateX(0); }
-        .land-panel-head { padding: 16px; border-bottom: 1px solid var(--border); background: linear-gradient(135deg, #0a1628 0%, #0d2137 100%); flex-shrink: 0; position: relative; }
-        .env-score-badge { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); }
-        .env-score-gauge { position: relative; width: 48px; height: 48px; flex-shrink: 0; }
-        .env-score-gauge svg { width: 48px; height: 48px; transform: rotate(-90deg); }
-        .env-score-gauge .gauge-bg  { fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 4; }
-        .env-score-gauge .gauge-fill { fill: none; stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 0.6s ease; }
-        .env-score-num { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-family: var(--mono); font-size: 11px; font-weight: 600; }
-        .env-score-info { flex: 1; }
-        .env-score-label { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
-        .env-score-sub { font-size: 10px; color: var(--text2); line-height: 1.4; }
-        .env-score-breakdown { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 3px; }
-        .env-score-feat { font-family: var(--mono); font-size: 9px; padding: 1px 6px; border-radius: 3px; background: rgba(255,255,255,0.06); color: var(--text2); border: 1px solid var(--border); }
-        .env-score-components { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 8px; }
-        .env-comp { padding: 5px 8px; border-radius: 4px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); }
-        .env-comp-label { font-size: 9px; color: var(--text2); margin-bottom: 1px; }
-        .env-comp-val { font-family: var(--mono); font-size: 11px; font-weight: 500; }
-        .land-panel-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 2px; padding-right: 32px; }
-        .land-panel-sub { font-size: 10px; color: var(--text2); }
-        .land-close-btn { position: absolute; top: 12px; right: 12px; background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--text2); cursor: pointer; font-size: 14px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; }
-        .land-close-btn:hover { background: var(--bg); color: var(--text); }
-        .land-summary-strip { display: flex; gap: 6px; padding: 10px 14px; background: var(--bg); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-        .land-sum-chip { flex: 1; padding: 6px 8px; background: var(--surface2); border-radius: 6px; text-align: center; }
-        .land-sum-val { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--text); }
-        .land-sum-label { font-size: 8px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
-        .land-body { flex: 1; overflow-y: auto; padding: 12px; }
-        .land-body::-webkit-scrollbar { width: 4px; }
-        .land-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-        .land-cat-section { margin-bottom: 14px; }
-        .land-cat-header { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; padding: 4px 8px; border-radius: 4px; margin-bottom: 6px; display: inline-block; }
-        .land-feature-item { font-size: 11px; color: var(--text); padding: 3px 0 3px 10px; border-left: 2px solid var(--border); margin-bottom: 2px; line-height: 1.4; }
-        .land-timestamp { font-size: 9px; color: var(--text2); padding: 10px 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
-        .land-empty { text-align: center; padding: 40px 20px; color: var(--text2); font-size: 11px; }
     </style>
 </head>
 <body>
     <div id="map"></div>
-
-    <!-- Land environment panel -->
-    <div id="land-panel">
-        <div class="land-panel-head">
-            <div class="land-panel-title" id="land-panel-title">Land Environment</div>
-            <div class="land-panel-sub" id="land-panel-sub"></div>
-            <button class="land-close-btn" onclick="closeLandPanel()">✕</button>
-        </div>
-        <div class="land-summary-strip" id="land-summary-strip"></div>
-        <div class="land-body" id="land-body"></div>
-        <div class="land-timestamp" id="land-timestamp"></div>
-    </div>
     <!-- ── News Panel ──────────────────────────────────────────────────── -->
     <div id="news-panel">
         <div class="news-panel-header">
@@ -355,136 +274,35 @@
         <div class="sidebar-header">
             <h1>Hummingbird Intelligence</h1>
             <p id="headerSubtitle">Loading...</p>
-            <a href="clusters.html" target="_blank" class="clusters-btn">🔬 Opportunity Clusters</a>
-        <a href="summary.html" target="_blank" class="clusters-btn" style="background:rgba(0,184,148,0.1);border-color:rgba(0,184,148,0.3);color:#00b894;margin-top:6px">📊 Market Summary</a>
         </div>
         <div class="sidebar-body">
-
-            <!-- Search -->
             <div class="section"><div class="section-label">Search</div><div class="search-box"><span class="icon">⌕</span><input type="text" id="searchInput" placeholder="Find an institution..." autocomplete="off"><div id="searchResults"></div></div></div>
-
-            <!-- Shortlist tabs -->
-            <div class="shortlist-tabs">
-                <div class="sl-tab active" id="slTabAll" onclick="setShortlistMode('all')">🗺 All Institutions</div>
-                <div class="sl-tab" id="slTabShortlist" onclick="setShortlistMode('shortlist')">⭐ Shortlist <span class="sl-count" id="slCount">0</span></div>
-            </div>
-
-            <!-- Shortlist panel (hidden by default) -->
-            <div id="slPanel" style="display:none">
-                <div class="sl-list" id="slList"></div>
-                <div class="sl-actions">
-                    <button class="btn btn-primary" onclick="exportShortlist()" style="font-size:11px">⬇ Export CSV</button>
-                    <button class="btn btn-ghost" onclick="clearShortlist()" style="font-size:11px">Clear All</button>
+            <div class="section"><div class="section-label">Data Source</div><div class="tabs"><div class="tab active" data-val="" onclick="setTab(this,'source')">All</div><div class="tab" data-val="IPEDS" onclick="setTab(this,'source')">IPEDS</div><div class="tab" data-val="Hummingbird_990" onclick="setTab(this,'source')">990</div></div></div>
+            <div class="section"><div class="section-label">Color By</div><div class="color-tabs" id="colorTabs"><div class="color-tab active" data-mode="distress" onclick="setColorMode(this)">Distress</div><div class="color-tab" data-mode="ml_risk" onclick="setColorMode(this)">ML Risk</div><div class="color-tab" data-mode="source" onclick="setColorMode(this)">Source</div><div class="color-tab" data-mode="type" onclick="setColorMode(this)">Type</div></div></div>
+            <div class="section"><div class="section-label">Institution Type</div><select id="fType"><option value="">All Types</option><option value="__higher_ed__">All Higher Education</option><optgroup label="Higher Education (IPEDS)"><option value="Public | 4-year">Public 4-Year</option><option value="Public | 2-year">Public 2-Year</option><option value="Private Non-Profit | 4-year">Private NP 4-Year</option><option value="Private Non-Profit | 2-year">Private NP 2-Year</option><option value="Private For-Profit | 4-year">Private FP 4-Year</option><option value="Private For-Profit | 2-year">Private FP 2-Year</option></optgroup><optgroup label="BMF / 990"><option value="Religious Institution">Religious</option><option value="Recreation/Camp">Recreation/Camp</option><option value="Educational Institution">Educational</option><option value="Youth Development">Youth Development</option><option value="Human Services">Human Services</option><option value="Environmental/Conservation">Environmental</option><option value="Animal/Wildlife">Animal/Wildlife</option><option value="Agriculture/Farm">Agriculture/Farm</option><option value="Housing/Residential">Housing/Residential</option><option value="Other Nonprofit">Other Nonprofit</option></optgroup></select></div>
+            <div class="section"><div class="section-label">Risk Filter</div><select id="fRisk"><option value="">All Levels</option><optgroup label="Distress Score"><option value="critical">Critical Only</option><option value="high_plus">High + Critical</option><option value="moderate_plus">Moderate+</option><option value="distressed_40">Score 40+</option></optgroup><optgroup label="ML Risk (IPEDS)"><option value="ml_critical">ML Critical</option><option value="ml_high">ML High+</option><option value="ml_any_warnings">Has ML Warnings</option></optgroup><optgroup label="Status"><option value="likely_closed">Likely Closed Only</option><option value="active_only">Active Only (hide closed)</option></optgroup></select></div>
+            <div class="section"><div class="section-label">Special Filters</div><select id="fSpecial"><option value="">No Special Filter</option><option value="operating_loss">💸 Operating Losses</option><option value="negative_equity">🔴 Negative Net Assets</option><option value="high_debt">🏦 High Debt Ratio</option><option value="revenue_decline">📉 Revenue Decline</option><option value="consecutive_losses">📉 Consecutive Losses</option><option value="has_property">🏗 Has Property Data</option><option value="land_grant">🏛️ Land Grant</option></select></div>
+            <div class="section"><div class="section-label">Acreage</div><select id="fAcreage"><option value="">Any Acreage</option><option value="20">20+ acres</option><option value="40">40+ acres</option><option value="60">60+ acres</option><option value="100">100+ acres</option><option value="200">200+ acres</option></select></div>
+            <div class="section">
+                <div class="section-label">Display</div>
+                <div class="toggle-row">
+                    <div class="toggle-label">Show likely closed
+                        <span>greyed dashed markers</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="showClosed" checked onchange="applyFilters()">
+                        <div class="slider"></div>
+                    </label>
                 </div>
             </div>
-
-            <!-- Filters panel -->
-            <div id="filtersPanel">
-                <!-- Data Source -->
-                <div class="section"><div class="section-label">Data Source</div><div class="tabs"><div class="tab active" data-val="" onclick="setTab(this,'source')">All</div><div class="tab" data-val="IPEDS" onclick="setTab(this,'source')">IPEDS</div><div class="tab" data-val="Hummingbird_990" onclick="setTab(this,'source')">990</div></div></div>
-
-                <!-- Color By -->
-                <div class="section"><div class="section-label">Color By</div><div class="color-tabs" id="colorTabs"><div class="color-tab active" data-mode="distress" onclick="setColorMode(this)">Distress</div><div class="color-tab" data-mode="ml_risk" onclick="setColorMode(this)">ML Risk</div><div class="color-tab" data-mode="source" onclick="setColorMode(this)">Source</div><div class="color-tab" data-mode="type" onclick="setColorMode(this)">Type</div></div></div>
-
-                <!-- Geography -->
-                <div class="section">
-                    <div class="section-label">Region</div>
-                    <div class="tabs" style="flex-wrap:wrap;gap:4px">
-                        <div class="tab active" style="flex:none;padding:6px 8px;font-size:10px" data-val="" onclick="setTab(this,'region')">All</div>
-                        <div class="tab" style="flex:none;padding:6px 8px;font-size:10px" data-val="Northeast" onclick="setTab(this,'region')">Northeast</div>
-                        <div class="tab" style="flex:none;padding:6px 8px;font-size:10px" data-val="Southeast" onclick="setTab(this,'region')">Southeast</div>
-                        <div class="tab" style="flex:none;padding:6px 8px;font-size:10px" data-val="Midwest" onclick="setTab(this,'region')">Midwest</div>
-                        <div class="tab" style="flex:none;padding:6px 8px;font-size:10px" data-val="Southwest" onclick="setTab(this,'region')">Southwest</div>
-                        <div class="tab" style="flex:none;padding:6px 8px;font-size:10px" data-val="West" onclick="setTab(this,'region')">West</div>
-                    </div>
-                    <select id="fState" style="margin-top:6px" onchange="applyFilters()">
-                        <option value="">All States</option>
-                        <option>Alabama</option><option>Alaska</option><option>Arizona</option><option>Arkansas</option><option>California</option><option>Colorado</option><option>Connecticut</option><option>Delaware</option><option>District of Columbia</option><option>Florida</option><option>Georgia</option><option>Hawaii</option><option>Idaho</option><option>Illinois</option><option>Indiana</option><option>Iowa</option><option>Kansas</option><option>Kentucky</option><option>Louisiana</option><option>Maine</option><option>Maryland</option><option>Massachusetts</option><option>Michigan</option><option>Minnesota</option><option>Mississippi</option><option>Missouri</option><option>Montana</option><option>Nebraska</option><option>Nevada</option><option>New Hampshire</option><option>New Jersey</option><option>New Mexico</option><option>New York</option><option>North Carolina</option><option>North Dakota</option><option>Ohio</option><option>Oklahoma</option><option>Oregon</option><option>Pennsylvania</option><option>Rhode Island</option><option>South Carolina</option><option>South Dakota</option><option>Tennessee</option><option>Texas</option><option>Utah</option><option>Vermont</option><option>Virginia</option><option>Washington</option><option>West Virginia</option><option>Wisconsin</option><option>Wyoming</option><option>Puerto Rico</option><option>Guam</option><option>Virgin Islands</option>
-                    </select>
-                </div>
-
-                <!-- Institution Type -->
-                <div class="section"><div class="section-label">Institution Type</div><select id="fType"><option value="">All Types</option><option value="__higher_ed__">All Higher Education</option><optgroup label="Higher Education (IPEDS)"><option value="Public | 4-year">Public 4-Year</option><option value="Public | 2-year">Public 2-Year</option><option value="Private Non-Profit | 4-year">Private NP 4-Year</option><option value="Private Non-Profit | 2-year">Private NP 2-Year</option><option value="Private For-Profit | 4-year">Private FP 4-Year</option><option value="Private For-Profit | 2-year">Private FP 2-Year</option></optgroup><optgroup label="BMF / 990"><option value="Religious Institution">Religious</option><option value="Recreation/Camp">Recreation/Camp</option><option value="Educational Institution">Educational</option><option value="Youth Development">Youth Development</option><option value="Human Services">Human Services</option><option value="Environmental/Conservation">Environmental</option><option value="Animal/Wildlife">Animal/Wildlife</option><option value="Agriculture/Farm">Agriculture/Farm</option><option value="Housing/Residential">Housing/Residential</option><option value="Other Nonprofit">Other Nonprofit</option></optgroup></select></div>
-
-                <!-- Urbanization -->
-                <div class="section"><div class="section-label">Urbanization</div><select id="fUrban" onchange="applyFilters()">
-                    <option value="">Any</option>
-                    <option value="City">City (Large / Midsize / Small)</option>
-                    <option value="Suburb">Suburb (Large / Midsize / Small)</option>
-                    <option value="Town">Town (Fringe / Distant / Remote)</option>
-                    <option value="Rural">Rural (Fringe / Distant / Remote)</option>
-                </select></div>
-
-                <!-- Risk Filter -->
-                <div class="section"><div class="section-label">Risk Filter</div><select id="fRisk"><option value="">All Levels</option><optgroup label="Distress Score"><option value="critical">Critical Only</option><option value="high_plus">High + Critical</option><option value="moderate_plus">Moderate+</option><option value="distressed_40">Score 40+</option></optgroup><optgroup label="ML Risk (IPEDS)"><option value="ml_critical">ML Critical</option><option value="ml_high">ML High+</option><option value="ml_any_warnings">Has ML Warnings</option></optgroup><optgroup label="Status"><option value="likely_closed">Likely Closed Only</option><option value="active_only">Active Only (hide closed)</option></optgroup></select></div>
-
-                <!-- Acreage — fixed to use all sources -->
-                <div class="section"><div class="section-label">Acreage</div><select id="fAcreage">
-                    <option value="">Any</option>
-                    <option value="has_data">Has Any Acreage Data</option>
-                    <option value="20">20+ acres</option>
-                    <option value="50">50+ acres</option>
-                    <option value="100">100+ acres</option>
-                    <option value="200">200+ acres</option>
-                    <option value="500">500+ acres</option>
-                    <option value="1000">1,000+ acres</option>
-                </select></div>
-
-                <!-- Financial Flags (collapsible) -->
-                <div class="section">
-                    <div class="filter-collapse-hdr" onclick="toggleFilterSection(this)">
-                        <div class="section-label" style="margin:0">Financial Flags</div>
-                        <span class="filter-collapse-arrow">▶</span>
-                    </div>
-                    <div class="filter-collapse-body">
-                        <select id="fSpecial" style="margin-top:6px"><option value="">No Special Filter</option><option value="operating_loss">💸 Operating Losses</option><option value="negative_equity">🔴 Negative Net Assets</option><option value="high_debt">🏦 High Debt Ratio</option><option value="revenue_decline">📉 Revenue Decline</option><option value="consecutive_losses">📉 Consecutive Losses</option><option value="has_property">🏗 Has Property Data</option><option value="land_grant">🏛️ Land Grant</option><option value="high_land_potential">🌱 High Land Potential</option></select>
-                    </div>
-                </div>
-
-                <!-- OSM Environment (collapsible) -->
-                <div class="section">
-                    <div class="filter-collapse-hdr" onclick="toggleFilterSection(this)">
-                        <div class="section-label" style="margin:0">🌿 Land Environment</div>
-                        <span class="filter-collapse-arrow">▶</span>
-                    </div>
-                    <div class="filter-collapse-body">
-                        <div style="font-size:9px;color:var(--text2);margin:6px 0 4px">Show only institutions with these OSM features nearby:</div>
-                        <div class="osm-filter-pills" id="osmFilterPills">
-                            <div class="osm-pill" data-cat="water" onclick="toggleOsmPill(this)">💧 Water</div>
-                            <div class="osm-pill" data-cat="winter" onclick="toggleOsmPill(this)">⛷ Winter</div>
-                            <div class="osm-pill" data-cat="outdoor_recreation" onclick="toggleOsmPill(this)">🥾 Recreation</div>
-                            <div class="osm-pill" data-cat="protected_land" onclick="toggleOsmPill(this)">🌲 Protected</div>
-                            <div class="osm-pill" data-cat="natural_features" onclick="toggleOsmPill(this)">⛰ Natural</div>
-                            <div class="osm-pill" data-cat="tourism_leisure" onclick="toggleOsmPill(this)">🎡 Tourism</div>
-                            <div class="osm-pill" data-cat="infrastructure" onclick="toggleOsmPill(this)">✈ Transit</div>
-                        </div>
-                        <div style="font-size:9px;color:var(--text2);margin-top:5px">Match: <label style="cursor:pointer"><input type="radio" name="osmMatch" value="any" checked onchange="applyFilters()"> Any</label> &nbsp; <label style="cursor:pointer"><input type="radio" name="osmMatch" value="all" onchange="applyFilters()"> All selected</label></div>
-                    </div>
-                </div>
-
-                <!-- Display toggle -->
-                <div class="section">
-                    <div class="section-label">Display</div>
-                    <div class="toggle-row">
-                        <div class="toggle-label">Show likely closed <span>greyed dashed markers</span></div>
-                        <label class="toggle-switch"><input type="checkbox" id="showClosed" checked onchange="applyFilters()"><div class="slider"></div></label>
-                    </div>
-                    <div class="toggle-row" style="margin-top:6px">
-                        <div class="toggle-label">Highlight shortlisted <span>gold ring on map</span></div>
-                        <label class="toggle-switch"><input type="checkbox" id="showShortlistHighlight" checked onchange="applyFilters()"><div class="slider"></div></label>
-                    </div>
-                </div>
-
-                <div class="btn-row"><button class="btn btn-primary" onclick="applyFilters()">Apply</button><button class="btn btn-ghost" onclick="resetFilters()">Reset</button></div>
-            </div>
-
+            <div class="btn-row"><button class="btn btn-primary" onclick="applyFilters()">Apply</button><button class="btn btn-ghost" onclick="resetFilters()">Reset</button></div>
             <div class="stats-grid">
-                <div class="stat-card total"><div class="stat-val" id="sShowing">0</div><div class="stat-label">Showing</div></div>
+                <div class="stat-card total"><div class="stat-val" id="sShowing">0</div><div class="stat-label">Plotted</div></div>
                 <div class="stat-card ipeds-card"><div class="stat-val" id="sIPEDS">0</div><div class="stat-label">IPEDS</div></div>
                 <div class="stat-card hb990-card"><div class="stat-val" id="s990">0</div><div class="stat-label">990</div></div>
                 <div class="stat-card critical"><div class="stat-val" id="sCritical">0</div><div class="stat-label">Critical</div></div>
                 <div class="stat-card high"><div class="stat-val" id="sHigh">0</div><div class="stat-label">High</div></div>
-                <div class="stat-card closed-card"><div class="stat-val" id="sClosed">0</div><div class="stat-label">Closed</div></div>
+                <div class="stat-card closed-card"><div class="stat-val" id="sClosed">0</div><div class="stat-label">Likely Closed</div></div>
             </div>
         </div>
     </div>
@@ -494,7 +312,7 @@
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
     <script>
     var map, markers, allData = [], plotData = [], colorMode = 'distress';
-    var filters = { source:'', region:'' };
+    var filters = { source:'' };
     var searchTimeout;
     var distressColors = {Critical:'#ff4757',High:'#ff6b35',Moderate:'#ffa502',Low:'#3b82f6',Healthy:'#10b981'};
     var sourceColors = {IPEDS:'#6c5ce7',Hummingbird_990:'#00b894'};
@@ -582,7 +400,6 @@
                     n990.toLocaleString()+' 990s · '+nClosed+' likely closed';
 
                 showMarkers(plotData);
-                updateShortlistCount();
             },
             error:function(){alert('Error loading CSV. Place Hummingbird_Master_Combined_v5.csv in the same folder.');}
         });
@@ -663,14 +480,6 @@
             }
 
             var m=L.circleMarker([lat,lng], opts);
-            // Gold ring overlay for shortlisted institutions
-            var showHighlight = document.getElementById('showShortlistHighlight');
-            if (showHighlight && showHighlight.checked && shortlist && shortlist.has(r.institution_name)) {
-                opts.color = '#ffc107';
-                opts.weight = 3;
-                opts.opacity = 1;
-                m = L.circleMarker([lat,lng], opts);
-            }
             m.bindPopup(function(){return createPopup(r);},{maxWidth:400});
             markers.addLayer(m);
         });
@@ -940,15 +749,19 @@
 
         // Property
         var prop='<div class="psection"><div class="psection-title" onclick="toggleSection(this)">\uD83C\uDFD7 Property & Land <span style="float:right;font-size:8px">\u25BC</span></div><div><div class="pgrid">';
-        var hasScraper=v(r.scraper_acres),hasOSM=v(r.osm_acres),hasPrimary=v(r.acreage_primary),is990=r.data_source==='Hummingbird_990';
-        if(hasPrimary&&!is990){
-            var pVal=parseFloat(r.acreage_primary).toLocaleString(undefined,{maximumFractionDigits:1});
-            var pSrc=r.acreage_primary_source==='OSM'?'OSM':'Scraper';
-            var pConf=r.acreage_primary_source==='OSM'?r.osm_confidence:r.scraper_confidence;
-            var pCol=pConf==='HIGH'?'var(--low)':pConf==='MEDIUM'?'var(--elevated)':'var(--text2)';
-            var aHtml='<div class="pgrid-val">'+pVal+'</div><div style="font-size:9px;color:'+pCol+';margin-top:2px">'+pSrc+' \u00b7 '+pConf+'</div>';
-            if(hasScraper&&hasOSM){var secSrc=r.acreage_primary_source==='OSM'?'Scraper':'OSM';var secVal=r.acreage_primary_source==='OSM'?parseFloat(r.scraper_acres).toLocaleString(undefined,{maximumFractionDigits:1}):parseFloat(r.osm_acres).toLocaleString(undefined,{maximumFractionDigits:1});var secConf=r.acreage_primary_source==='OSM'?r.scraper_confidence:r.osm_confidence;aHtml+='<div style="font-size:9px;color:var(--text2);margin-top:3px">Alt ('+secSrc+'): '+secVal+' ac \u00b7 '+secConf+'</div>';}
-            if(v(r.acreage_conflict_flag))aHtml+='<div style="font-size:9px;color:var(--high);margin-top:3px">\u26a0 '+r.acreage_conflict_flag+'</div>';
+        var hasScraper=v(r.scraper_acres),hasOSM=v(r.osm_acres),hasHIFLD=v(r.hifld_acres),hasPrimary=v(r.acreage_primary),is990=r.data_source==='Hummingbird_990';
+        if((hasPrimary||hasHIFLD||hasScraper||hasOSM)&&!is990){
+            var pSrc=r.acreage_primary_source||'';
+            var pVal=hasPrimary?parseFloat(r.acreage_primary).toLocaleString(undefined,{maximumFractionDigits:1}):'--';
+            var pConf=pSrc==='HIFLD'?'POLYGON':pSrc==='OSM'?r.osm_confidence:r.scraper_confidence;
+            var pCol=pSrc==='HIFLD'?'var(--accent2)':pConf==='HIGH'?'var(--low)':pConf==='MEDIUM'?'var(--elevated)':'var(--text2)';
+            var aHtml='<div class="pgrid-val">'+pVal+'</div><div style="font-size:9px;color:'+pCol+';margin-top:2px">'+pSrc+' · '+pConf+'</div>';
+            var altSources=[];
+            if(hasHIFLD&&pSrc!=='HIFLD'){altSources.push('HIFLD: '+parseFloat(r.hifld_acres).toLocaleString(undefined,{maximumFractionDigits:1})+' ac · polygon');}
+            if(hasScraper&&pSrc!=='scraper'){altSources.push('Scraper: '+parseFloat(r.scraper_acres).toLocaleString(undefined,{maximumFractionDigits:1})+' ac · '+(r.scraper_confidence||'?'));}
+            if(hasOSM&&pSrc!=='OSM'){altSources.push('OSM: '+parseFloat(r.osm_acres).toLocaleString(undefined,{maximumFractionDigits:1})+' ac · '+(r.osm_confidence||'?'));}
+            if(altSources.length>0){aHtml+='<div style="font-size:9px;color:var(--text2);margin-top:3px">'+altSources.join('<br>')+'</div>';}
+            if(v(r.acreage_conflict_flag))aHtml+='<div style="font-size:9px;color:var(--high);margin-top:3px">⚠ Sources conflict · review audit file</div>';
             if(v(r.scraper_source)){var ss=r.scraper_source.length>50?r.scraper_source.substring(0,50)+'\u2026':r.scraper_source;var ssH=r.scraper_source.startsWith('http')?'<a href="'+r.scraper_source+'" target="_blank" style="color:var(--accent2);text-decoration:none">'+ss+'</a>':ss;aHtml+='<div style="font-size:9px;color:var(--text2);margin-top:3px">Source: '+ssH+'</div>';}
             prop+=gi('Acres',aHtml);
         }else if(is990&&(hasScraper||hasOSM)){
@@ -1012,24 +825,6 @@
         var nameHtml = closed ? '<h3 class="dimmed">⬡ '+name+'</h3>' : '<h3>'+name+'</h3>';
         var uid = r.unitid ? ('ipeds_' + r.unitid) : ('ein_' + (r.ein || ''));
         var _attr = function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); };
-
-        // ⭐ Star button
-        var _isStarred = shortlist.has(r.institution_name);
-        var starBtnHtml = '<button class="popup-star-btn'+(_isStarred?' starred':'')+'"'
-            +' data-name="'+_attr(r.institution_name||'')+'"'
-            +' onclick="toggleStarFromPopup(this)"'
-            +' title="'+(_isStarred?'Remove from shortlist':'Add to shortlist')+'">⭐</button>';
-
-        // 🌿 Land button
-        var _landData = (typeof OSM_LAND_DATA !== 'undefined') ? (OSM_LAND_DATA[r.institution_name]||null) : null;
-        var landBtnHtml = '<button class="popup-land-btn'+(_landData?' has-data':' no-data')+'"'
-            +' data-name="'+_attr(r.institution_name||'')+'"'
-            +' data-city="'+_attr(r.city||'')+'"'
-            +' data-state="'+_attr(r.state||'')+'"'
-            +(_landData?' onclick="openLandPanelFromBtn(this)"':'')+
-            +' title="'+(_landData?'View land environment data':'No land data scraped yet')+'">🌿</button>';
-
-        // 📰 News button
         var newsBtnHtml = '<button class="popup-news-btn"'
             + ' data-uid="'    + _attr(uid) + '"'
             + ' data-name="'   + _attr(r.institution_name||'') + '"'
@@ -1040,8 +835,7 @@
             + ' onclick="openNewsPanelFromBtn(this)"'
             + ' title="Load news &amp; org data">&#128240;</button>';
         return '<div class="popup-wrap">'
-            +'<div class="popup-head '+headClass+'">'+nameHtml
-            +'<div class="popup-btn-group">'+starBtnHtml+landBtnHtml+newsBtnHtml+'</div>'
+            +'<div class="popup-head '+headClass+'">'+nameHtml+newsBtnHtml
             +'<div class="popup-loc">'+locParts.join('<br>')+'</div>'
             +'<div class="popup-badges">'+badges+'</div></div>'
             +'<div class="popup-content" style="padding:12px;flex:1;overflow-y:auto;min-height:0">'
@@ -1080,141 +874,6 @@
         document.getElementById('searchInput').value=r.institution_name||'';
     }
 
-    // ── Shortlist ──────────────────────────────────────────────────────────────
-    var shortlist = new Set(JSON.parse(localStorage.getItem('hb_shortlist') || '[]'));
-    var shortlistMode = 'all';
-
-    function saveShortlist() {
-        localStorage.setItem('hb_shortlist', JSON.stringify([...shortlist]));
-    }
-    function updateShortlistCount() {
-        document.getElementById('slCount').textContent = shortlist.size;
-    }
-    function renderShortlistPanel() {
-        var list = document.getElementById('slList');
-        if (!shortlist.size) {
-            list.innerHTML = '<div class="sl-empty"><div class="sl-empty-icon">\u2B50</div>No institutions shortlisted yet.<br>Click \u2B50 on any popup to add one.</div>';
-            return;
-        }
-        var items = [...shortlist].map(function(name) {
-            var r = allData.find(function(d){ return d.institution_name === name; }) || {};
-            var meta = [r.city, r.state].filter(Boolean).join(', ');
-            var cat = r.distress_category || '';
-            var score = parseFloat(r.distress_score);
-            var scoreStr = !isNaN(score) ? score.toFixed(0) + ' \u2014 ' : '';
-            var safeName = name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-            return '<div class="sl-item" onclick="flyToInstitution(\'' + safeName + '\')">'
-                +'<div><div class="sl-item-name">'+name+'</div>'
-                +'<div class="sl-item-meta">'+meta+(cat?' \u00b7 '+scoreStr+cat:'')+'</div></div>'
-                +'<div class="sl-item-remove" onclick="event.stopPropagation();removeFromShortlist(\'' + safeName + '\')">\u2715</div>'
-                +'</div>';
-        });
-        list.innerHTML = items.join('');
-    }
-    function toggleStarFromPopup(btn) {
-        var name = btn.getAttribute('data-name');
-        if (shortlist.has(name)) {
-            shortlist.delete(name);
-            btn.classList.remove('starred');
-            btn.title = 'Add to shortlist';
-        } else {
-            shortlist.add(name);
-            btn.classList.add('starred');
-            btn.title = 'Remove from shortlist';
-        }
-        saveShortlist();
-        updateShortlistCount();
-        renderShortlistPanel();
-        applyFilters();
-    }
-    function removeFromShortlist(name) {
-        shortlist.delete(name);
-        saveShortlist();
-        updateShortlistCount();
-        renderShortlistPanel();
-        applyFilters();
-    }
-    function clearShortlist() {
-        shortlist.clear();
-        saveShortlist();
-        updateShortlistCount();
-        renderShortlistPanel();
-        applyFilters();
-    }
-    function setShortlistMode(mode) {
-        shortlistMode = mode;
-        document.getElementById('slTabAll').classList.toggle('active', mode === 'all');
-        document.getElementById('slTabShortlist').classList.toggle('active', mode === 'shortlist');
-        document.getElementById('slPanel').style.display = mode === 'shortlist' ? '' : 'none';
-        document.getElementById('filtersPanel').style.display = mode === 'all' ? '' : 'none';
-        if (mode === 'shortlist') renderShortlistPanel();
-        applyFilters();
-    }
-    function flyToInstitution(name) {
-        var r = allData.find(function(d){ return d.institution_name === name; });
-        if (!r) return;
-        var lat = parseFloat(r.latitude), lng = parseFloat(r.longitude);
-        if (isNaN(lat)||isNaN(lng)) return;
-        map.setView([lat, lng], 14);
-        markers.eachLayer(function(m) {
-            var ll = m.getLatLng();
-            if (Math.abs(ll.lat - lat) < 0.001 && Math.abs(ll.lng - lng) < 0.001) {
-                m.openPopup();
-            }
-        });
-    }
-    function exportShortlist() {
-        if (!shortlist.size) { alert('No institutions shortlisted.'); return; }
-        var COLS = ['institution_name','data_source','institution_type','city','state',
-            'distress_category','distress_score','risk_tier',
-            'revenue_2024','expenses_2024','net_income_2024','assets_2024','liabilities_2024',
-            'equity_ratio','operating_margin','enrollment_2024','enrollment_yoy_pct',
-            'acreage_primary','acreage_primary_source','scraper_acres','osm_acres',
-            'plant_property_equipment','fte_staff','urbanization','latitude','longitude'];
-        var rows = [...shortlist].map(function(name) {
-            var r = allData.find(function(d){ return d.institution_name === name; }) || {};
-            return COLS.map(function(c){ return '"'+String(r[c]||'').replace(/"/g,'""')+'"'; }).join(',');
-        });
-        var csv = COLS.join(',') + '\n' + rows.join('\n');
-        var blob = new Blob([csv], {type:'text/csv'});
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'hb_shortlist_' + new Date().toISOString().slice(0,10) + '.csv';
-        a.click();
-    }
-
-    // ── US Region lookup ───────────────────────────────────────────────────────
-    var STATE_REGION = {
-        'Maine':'Northeast','New Hampshire':'Northeast','Vermont':'Northeast',
-        'Massachusetts':'Northeast','Rhode Island':'Northeast','Connecticut':'Northeast',
-        'New York':'Northeast','New Jersey':'Northeast','Pennsylvania':'Northeast',
-        'Maryland':'Northeast','Delaware':'Northeast','District of Columbia':'Northeast',
-        'Virginia':'Southeast','West Virginia':'Southeast','North Carolina':'Southeast',
-        'South Carolina':'Southeast','Georgia':'Southeast','Florida':'Southeast',
-        'Alabama':'Southeast','Mississippi':'Southeast','Tennessee':'Southeast',
-        'Kentucky':'Southeast','Arkansas':'Southeast','Louisiana':'Southeast',
-        'Ohio':'Midwest','Indiana':'Midwest','Illinois':'Midwest','Michigan':'Midwest',
-        'Wisconsin':'Midwest','Minnesota':'Midwest','Iowa':'Midwest','Missouri':'Midwest',
-        'North Dakota':'Midwest','South Dakota':'Midwest','Nebraska':'Midwest','Kansas':'Midwest',
-        'Texas':'Southwest','Oklahoma':'Southwest','New Mexico':'Southwest','Arizona':'Southwest',
-        'Montana':'West','Idaho':'West','Wyoming':'West','Colorado':'West','Utah':'West',
-        'Nevada':'West','California':'West','Oregon':'West','Washington':'West',
-        'Alaska':'West','Hawaii':'West'
-    };
-
-    // ── Filter helpers ─────────────────────────────────────────────────────────
-    function toggleFilterSection(hdr) {
-        hdr.classList.toggle('open');
-        hdr.nextElementSibling.classList.toggle('open');
-    }
-    function toggleOsmPill(pill) {
-        pill.classList.toggle('active');
-        applyFilters();
-    }
-    function getAcreage(r) {
-        return parseFloat(r.acreage_primary) || parseFloat(r.scraper_acres) || parseFloat(r.osm_acres) || 0;
-    }
-
     // Filters
     function setTab(el,key){
         el.parentElement.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
@@ -1232,30 +891,26 @@
     function applyFilters(){
         var f={
             source:filters.source,
-            region:filters.region||'',
-            state:document.getElementById('fState').value,
             type:document.getElementById('fType').value,
-            urban:document.getElementById('fUrban').value,
             risk:document.getElementById('fRisk').value,
             special:document.getElementById('fSpecial').value,
             acreage:document.getElementById('fAcreage').value
         };
         var showClosed = document.getElementById('showClosed').checked;
-        var osmActive = [...document.querySelectorAll('.osm-pill.active')].map(function(p){return p.dataset.cat;});
-        var osmMatchAll = document.querySelector('input[name="osmMatch"]:checked').value === 'all';
-        var baseData = (shortlistMode === 'shortlist')
-            ? allData.filter(function(r){ return shortlist.has(r.institution_name); })
-            : plotData;
-        var filtered=baseData.filter(function(r){
+
+        var filtered=plotData.filter(function(r){
             var closed = isLikelyClosed(r);
+
+            // Toggle: hide closed unless explicitly filtering for them
             if(closed && !showClosed && f.risk !== 'likely_closed') return false;
+
             if(f.source&&r.data_source!==f.source)return false;
-            if(f.region){var reg=STATE_REGION[r.state]||'';if(reg!==f.region)return false;}
-            if(f.state&&r.state!==f.state)return false;
-            if(f.type){if(f.type==='__higher_ed__'){var it=r.institution_type||'';if(it.indexOf('Public |')<0&&it.indexOf('Private Non-Profit |')<0&&it.indexOf('Private For-Profit |')<0)return false;}else{if(r.institution_type!==f.type)return false;}}
-            if(f.urban){var urb=(r.urbanization||'').split(':')[0].trim();if(urb!==f.urban)return false;}
+            if(f.type){if(f.type==='__higher_ed__'){var it=r.institution_type||'';var isHE=it.indexOf('Public |')>=0||it.indexOf('Private Non-Profit |')>=0||it.indexOf('Private For-Profit |')>=0;if(!isHE)return false;}else{if(r.institution_type!==f.type)return false;}}
+
+            // Status filters
             if(f.risk==='likely_closed') return closed;
             if(f.risk==='active_only' && closed) return false;
+
             if(f.risk==='critical'&&r.distress_category!=='Critical')return false;
             if(f.risk==='high_plus'){var c=r.distress_category;if(c!=='Critical'&&c!=='High')return false;}
             if(f.risk==='moderate_plus'){var c=r.distress_category;if(c!=='Critical'&&c!=='High'&&c!=='Moderate')return false;}
@@ -1263,240 +918,31 @@
             if(f.risk==='ml_critical'&&r.risk_tier!=='Critical')return false;
             if(f.risk==='ml_high'&&r.risk_tier!=='Critical'&&r.risk_tier!=='High')return false;
             if(f.risk==='ml_any_warnings'&&!(parseInt(r.ml_warning_count)>0))return false;
+
             if(f.special==='operating_loss'&&!flag(r,'flag_operating_losses')&&!flag(r,'flag_990_operating_loss'))return false;
             if(f.special==='negative_equity'&&!flag(r,'flag_negative_net_worth')&&!flag(r,'flag_990_negative_net_assets'))return false;
             if(f.special==='high_debt'&&!flag(r,'flag_high_debt')&&!flag(r,'flag_990_high_debt'))return false;
             if(f.special==='revenue_decline'&&!flag(r,'flag_990_revenue_decline_1yr')&&!flag(r,'flag_enrollment_decline'))return false;
             if(f.special==='consecutive_losses'&&!flag(r,'flag_990_consecutive_losses'))return false;
-            if(f.special==='has_property'&&!(parseFloat(r.plant_property_equipment)>0))return false;
+            if(f.special==='has_property'&&!flag(r,'has_property_data'))return false;
             if(f.special==='land_grant'&&r.is_land_grant!=='Land Grant Institution')return false;
-            if(f.special==='high_land_potential'&&!flag(r,'flag_high_land_potential'))return false;
-            if(f.acreage==='has_data'){if(!getAcreage(r))return false;}
-            else if(f.acreage){if(getAcreage(r)<parseFloat(f.acreage))return false;}
-            if(osmActive.length>0){
-                var osmEntry=(typeof OSM_LAND_DATA!=='undefined')?(OSM_LAND_DATA[r.institution_name]||null):null;
-                var cats=osmEntry?(osmEntry.categories||[]):[];
-                if(osmMatchAll){if(!osmActive.every(function(c){return cats.indexOf(c)>=0;}))return false;}
-                else{if(!osmActive.some(function(c){return cats.indexOf(c)>=0;}))return false;}
-            }
+            if(f.acreage){var minAcres=parseFloat(f.acreage);var acres=parseFloat(r.acreage_primary)||parseFloat(r.scraper_acres)||parseFloat(r.osm_acres)||0;if(acres<minAcres)return false;}
             return true;
         });
         showMarkers(filtered);
     }
     function resetFilters(){
-        filters={source:'',region:''};
-        document.querySelectorAll('#sidebar .tab').forEach(function(t,i){t.classList.toggle('active',i===0);});
-        document.getElementById('fState').value='';
+        filters={source:''};
+        document.querySelectorAll('.tab').forEach(function(t,i){t.classList.toggle('active',i===0);});
         document.getElementById('fType').value='';
-        document.getElementById('fUrban').value='';
         document.getElementById('fRisk').value='';
         document.getElementById('fSpecial').value='';
         document.getElementById('fAcreage').value='';
+        document.getElementById('fAcreage').value='';
         document.getElementById('searchInput').value='';
         document.getElementById('showClosed').checked=true;
-        document.querySelectorAll('.osm-pill.active').forEach(function(p){p.classList.remove('active');});
-        document.querySelector('input[name="osmMatch"][value="any"]').checked=true;
         showMarkers(plotData);
     }
-    // ── Land panel ─────────────────────────────────────────────────────────────
-    var LAND_CAT_COLORS = {
-        water:              { bg: 'rgba(59,158,221,0.15)',  color: '#3b9edd' },
-        winter:             { bg: 'rgba(168,216,240,0.15)', color: '#a8d8f0' },
-        outdoor_recreation: { bg: 'rgba(16,185,129,0.15)',  color: '#10b981' },
-        protected_land:     { bg: 'rgba(107,203,119,0.15)', color: '#6bcb77' },
-        natural_features:   { bg: 'rgba(184,169,240,0.15)', color: '#b8a9f0' },
-        tourism_leisure:    { bg: 'rgba(255,165,2,0.15)',   color: '#ffa502' },
-        infrastructure:     { bg: 'rgba(139,143,163,0.15)', color: '#8b8fa3' }
-    };
-    var LAND_CAT_LABELS = {
-        water: '💧 Water', winter: '⛷ Winter', outdoor_recreation: '🥾 Outdoor Recreation',
-        protected_land: '🌲 Protected Land', natural_features: '⛰ Natural Features',
-        tourism_leisure: '🎡 Tourism & Leisure', infrastructure: '✈ Infrastructure'
-    };
-
-    function openLandPanelFromBtn(btn) {
-        var name = btn.getAttribute('data-name');
-        var city = btn.getAttribute('data-city');
-        var state = btn.getAttribute('data-state');
-        if (typeof OSM_LAND_DATA === 'undefined' || !OSM_LAND_DATA[name]) return;
-        openLandPanel(name, city, state, OSM_LAND_DATA[name]);
-    }
-
-    function envScoreColor(score) {
-        if (score === null || score === undefined) return '#3d4f6e';
-        if (score >= 85) return '#00b894';
-        if (score >= 70) return '#10b981';
-        if (score >= 55) return '#ffa502';
-        if (score >= 35) return '#ff6b35';
-        return '#8b8fa3';
-    }
-    function envScoreLabel(score) {
-        if (score === null || score === undefined) return 'Not Scraped';
-        if (score >= 85) return 'Exceptional';
-        if (score >= 70) return 'Strong';
-        if (score >= 55) return 'Moderate';
-        if (score >= 35) return 'Limited';
-        return 'Minimal';
-    }
-    // ── Partnership Readiness Score ─────────────────────────────────────────
-    var _BEA = {'Hawaii':6.1,'Alaska':5.3,'Montana':4.9,'Vermont':4.5,'Wyoming':4.3,'Maine':4.1,'Idaho':3.9,'New Mexico':3.7,'Oregon':3.5,'Colorado':3.4,'South Dakota':3.3,'North Dakota':3.2,'Utah':3.1,'West Virginia':3.0,'Arkansas':2.9,'New Hampshire':2.8,'Mississippi':2.8,'Kentucky':2.7,'Tennessee':2.7,'South Carolina':2.6,'Alabama':2.6,'Nevada':2.6,'Wisconsin':2.5,'Minnesota':2.5,'Washington':2.5,'Nebraska':2.5,'Kansas':2.4,'Iowa':2.4,'Missouri':2.4,'Indiana':2.4,'North Carolina':2.3,'Arizona':2.3,'Oklahoma':2.3,'Louisiana':2.3,'Georgia':2.2,'Virginia':2.2,'Michigan':2.2,'Ohio':2.1,'Pennsylvania':2.1,'Texas':2.1,'California':2.0,'Florida':2.0,'Illinois':1.9,'Maryland':1.9,'Massachusetts':1.8,'New Jersey':1.7,'Connecticut':1.6,'New York':1.6,'Delaware':1.6,'Rhode Island':1.5,'District of Columbia':1.0};
-    var _CLIFF = {'Hawaii':-33,'California':-29,'New York':-27,'West Virginia':-26,'Wyoming':-23,'New Mexico':-21,'Oregon':-19,'Pennsylvania':-17,'Mississippi':-16,'Rhode Island':-15,'Vermont':-15,'Alaska':-14,'Maine':-10,'New Hampshire':-10,'Colorado':-12,'Michigan':-11,'Ohio':-11,'Illinois':-10,'Connecticut':-9,'Massachusetts':-9,'Maryland':-8,'Missouri':-8,'Wisconsin':-8,'Indiana':-7,'Minnesota':-7,'Kansas':-7,'Nebraska':-6,'Iowa':-6,'Washington':-5,'Virginia':-5,'Nevada':-4,'Delaware':-4,'New Jersey':-1,'Arizona':2,'Florida':3,'Georgia':4,'North Carolina':5,'Tennessee':6,'South Carolina':7,'Texas':8,'Kentucky':-3,'Alabama':-2,'Louisiana':-3,'Arkansas':-2,'Oklahoma':1,'Utah':3,'Idaho':6,'Montana':4,'North Dakota':5,'South Dakota':4,'District of Columbia':-5};
-    var _CLOSURES = {'Pennsylvania':12,'New York':10,'California':8,'Massachusetts':7,'Illinois':6,'Ohio':6,'Michigan':5,'Virginia':5,'Iowa':5,'Indiana':4,'Wisconsin':4,'Minnesota':4,'Missouri':4,'Connecticut':4,'New Jersey':3,'Texas':3,'Florida':3,'Georgia':3,'North Carolina':3,'Vermont':3,'Maine':2,'Oregon':2,'Washington':2,'Kansas':2,'Nebraska':2,'Montana':2,'Tennessee':2,'Alabama':2,'Kentucky':2,'Oklahoma':2,'Colorado':1,'Arizona':1,'New Hampshire':1,'Rhode Island':1,'West Virginia':1,'Maryland':1,'South Carolina':1,'Mississippi':1,'Arkansas':1,'Louisiana':1,'Nevada':1,'Idaho':1,'New Mexico':1,'Hawaii':1};
-    var _SFUND = {'Washington':3,'Colorado':3,'Oregon':3,'California':3,'Minnesota':3,'Maryland':3,'Massachusetts':3,'Connecticut':3,'New York':3,'Utah':3,'Idaho':3,'Montana':3,'North Dakota':3,'South Dakota':3,'Texas':2,'Florida':2,'Georgia':2,'North Carolina':2,'Virginia':2,'Tennessee':2,'Indiana':2,'Ohio':2,'Wisconsin':2,'Michigan':2,'Iowa':2,'Nebraska':2,'Kansas':2,'Missouri':2,'Oklahoma':2,'Arkansas':2,'South Carolina':2,'New Jersey':2,'Delaware':2,'Nevada':2,'Arizona':2,'Hawaii':2,'Alaska':2,'New Mexico':2,'Wyoming':2,'Illinois':1,'Pennsylvania':1,'New Hampshire':1,'Vermont':1,'Maine':1,'Rhode Island':1,'Kentucky':1,'West Virginia':1,'Mississippi':1,'Louisiana':1,'Alabama':1,'District of Columbia':1};
-
-    function computePRScore(rec) {
-        if (!rec) return null;
-        var state = rec.state || '';
-        var urb   = (rec.urbanization || '').split(':')[0].trim();
-        var ds    = parseFloat(rec.distress_score) || 0;
-        var cr    = (parseFloat(rec.closure_risk_score) || 0) * 100;
-        var dcat  = rec.distress_category || '';
-        // Axis 1: State Policy (35)
-        var bea   = _BEA[state] || 2.4;
-        var cliff = _CLIFF[state] !== undefined ? _CLIFF[state] : -13;
-        var ncls  = _CLOSURES[state] || 0;
-        var s1a   = bea>=4.0?15:bea>=3.5?13:bea>=3.0?11:bea>=2.5?9:bea>=2.0?7:bea>=1.7?5:3;
-        var s1b   = cliff<=-20?12:cliff<=-15?10:cliff<=-10?8:cliff<=-5?6:cliff<=0?4:cliff<=5?2:0;
-        var s1c   = ncls>=8?8:ncls>=5?6:ncls>=3?4:ncls>=1?2:0;
-        // Axis 2: Funding (30)
-        var s2a   = urb==='Rural'?10:urb==='Town'?7:urb==='Suburb'?3:urb==='City'?0:5;
-        var ft    = _SFUND[state] || 2;
-        var s2b   = ft===3?10:ft===2?6:2;
-        var s2c   = 5;
-        // Axis 3: Urgency (35)
-        var comb  = ds*0.6 + cr*0.4;
-        var s3a   = comb>=60?15:comb>=45?12:comb>=30?9:comb>=20?6:comb>=10?3:1;
-        var urbPts= urb==='Rural'?12:urb==='Town'?9:urb==='Suburb'?5:urb==='City'?2:6;
-        var dBonus= dcat==='Critical'||dcat==='High'?2:dcat==='Moderate'?1:0;
-        var s3b   = Math.min(12, urbPts + dBonus);
-        var s3c   = 0;
-        if (rec.flag_negative_net_worth==='1'||rec.flag_990_negative_net_assets==='1') s3c+=3;
-        if (rec.flag_enrollment_decline==='1') s3c+=2;
-        if (rec.flag_operating_losses==='1'||rec.flag_990_operating_loss==='1') s3c+=2;
-        if ((parseFloat(rec.closure_risk_score)||0)>0.3) s3c+=1;
-        s3c = Math.min(8, s3c);
-        var total = Math.min(100, Math.max(0, s1a+s1b+s1c+s2a+s2b+s2c+s3a+s3b+s3c));
-        return {
-            total: Math.round(total),
-            axis1: s1a+s1b+s1c, axis2: s2a+s2b+s2c, axis3: s3a+s3b+s3c,
-            bea: bea, cliff: cliff, ncls: ncls,
-            label: total>=75?'Excellent':total>=60?'Strong':total>=45?'Moderate':total>=30?'Limited':'Low'
-        };
-    }
-
-    function buildPRBadge(pr) {
-        if (!pr) return '';
-        var color = pr.total>=75?'#00b894':pr.total>=60?'#10b981':pr.total>=45?'#ffa502':pr.total>=30?'#ff6b35':'#ff4757';
-        var bgColor = color + '15';
-        return '<div style="margin-top:10px;padding:10px 12px;background:' + bgColor + ';border-radius:8px;border:1px solid ' + color + '44">'
-            + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
-            + '<div style="width:36px;height:36px;border-radius:50%;border:2.5px solid ' + color + ';display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:' + color + '">' + pr.total + '</div>'
-            + '<div><div style="font-size:12px;font-weight:600;color:' + color + '">' + pr.label + ' Partnership Fit</div>'
-            + '<div style="font-size:10px;color:var(--text2)">BEA outdoor ' + pr.bea + '% GDP · WICHE cliff ' + pr.cliff + '% · ' + pr.ncls + ' prior closures</div></div></div>'
-            + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">'
-            + '<div style="background:rgba(255,255,255,.04);border-radius:4px;padding:5px;text-align:center"><div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">' + pr.axis1 + '/35</div><div style="font-size:9px;color:var(--text2);margin-top:1px">State Policy</div></div>'
-            + '<div style="background:rgba(255,255,255,.04);border-radius:4px;padding:5px;text-align:center"><div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">' + pr.axis2 + '/30</div><div style="font-size:9px;color:var(--text2);margin-top:1px">Funding Env.</div></div>'
-            + '<div style="background:rgba(255,255,255,.04);border-radius:4px;padding:5px;text-align:center"><div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">' + pr.axis3 + '/35</div><div style="font-size:9px;color:var(--text2);margin-top:1px">Gov. Urgency</div></div>'
-            + '</div></div>';
-    }
-
-    function buildEnvScoreBadge(envScore) {
-        if (!envScore || envScore.score === null || envScore.score === undefined) {
-            return '<div class="env-score-badge"><div style="font-size:11px;color:var(--text2)">Environment score not yet available — OSM scrape pending.</div></div>';
-        }
-        var score = envScore.score;
-        var color = envScoreColor(score);
-        var label = envScoreLabel(score);
-        var r = 20; var circ = 2 * Math.PI * r;
-        var filled = (score / 100) * circ;
-        var topFeats = (envScore.top_features || []).slice(0, 5);
-        var gaugeHtml = '<div class="env-score-gauge">'
-            + '<svg viewBox="0 0 48 48"><circle class="gauge-bg" cx="24" cy="24" r="'+r+'"/>'
-            + '<circle class="gauge-fill" cx="24" cy="24" r="'+r+'" stroke="'+color+'" '
-            + 'stroke-dasharray="'+circ.toFixed(1)+'" stroke-dashoffset="'+(circ-filled).toFixed(1)+'"/>'
-            + '</svg><div class="env-score-num" style="color:'+color+'">'+score.toFixed(0)+'</div></div>';
-        var featsHtml = topFeats.length > 0
-            ? '<div class="env-score-breakdown">'
-              + topFeats.map(function(f){ return '<span class="env-score-feat">'+f+'</span>'; }).join('')
-              + '</div>'
-            : '';
-        var compsHtml = '<div class="env-score-components">'
-            + '<div class="env-comp"><div class="env-comp-label">Feature Quality</div>'
-            + '<div class="env-comp-val" style="color:'+envScoreColor(envScore.feature_score)+'">'+envScore.feature_score+'</div></div>'
-            + '<div class="env-comp"><div class="env-comp-label">Category Mix</div>'
-            + '<div class="env-comp-val" style="color:'+envScoreColor(envScore.category_score)+'">'+envScore.category_score+'</div></div>'
-            + '<div class="env-comp"><div class="env-comp-label">Feature Density</div>'
-            + '<div class="env-comp-val" style="color:'+envScoreColor(envScore.density_bonus)+'">'+envScore.density_bonus+'</div></div>'
-            + '<div class="env-comp"><div class="env-comp-label">Proximity</div>'
-            + '<div class="env-comp-val" style="color:'+envScoreColor(envScore.radius_bonus)+'">'+envScore.radius_bonus+'</div></div>'
-            + '</div>';
-        return '<div class="env-score-badge">' + gaugeHtml
-            + '<div class="env-score-info">'
-            + '<div class="env-score-label" style="color:'+color+'">'+label+' Environment</div>'
-            + '<div class="env-score-sub">HV Environment Score — named natural features and outdoor access'
-            + (envScore.context_mult && envScore.context_mult < 1.0 ? ' <span style="color:#ffa502">×' + envScore.context_mult + ' urban context</span>' : '')
-            + '.</div>'
-            + featsHtml + compsHtml + '</div></div>';
-    }
-
-    function openLandPanel(name, city, state, data) {
-        var np = document.getElementById('news-panel');
-        if (np) np.classList.remove('open');
-        document.getElementById('land-panel-title').textContent = name;
-        document.getElementById('land-panel-sub').textContent = [city, state].filter(Boolean).join(', ');
-        // Environment score badge
-        var envScore = (data && data.env_score) ? data.env_score : null;
-        var badgeEl = document.getElementById('land-env-score-badge');
-        if (!badgeEl) {
-            badgeEl = document.createElement('div');
-            badgeEl.id = 'land-env-score-badge';
-            document.querySelector('.land-panel-head').appendChild(badgeEl);
-        }
-        badgeEl.innerHTML = buildEnvScoreBadge(envScore);
-        // Partnership Readiness badge
-        var rec = (typeof allData !== 'undefined') ? allData.find(function(r){ return r.institution_name === name; }) : null;
-        var prScore = computePRScore(rec);
-        var prBadgeEl = document.getElementById('land-pr-badge');
-        if (!prBadgeEl) {
-            prBadgeEl = document.createElement('div');
-            prBadgeEl.id = 'land-pr-badge';
-            document.querySelector('.land-panel-head').appendChild(prBadgeEl);
-        }
-        prBadgeEl.innerHTML = buildPRBadge(prScore);
-        // Summary strip
-        var cats = (data && data.categories) ? data.categories : [];
-        var count = (data && data.count) ? data.count : 0;
-        var radius = (data && data.radius_miles) ? data.radius_miles : 20;
-        document.getElementById('land-summary-strip').innerHTML =
-            '<div class="land-sum-chip"><div class="land-sum-val">'+cats.length+'</div><div class="land-sum-label">Categories</div></div>'
-           +'<div class="land-sum-chip"><div class="land-sum-val">'+count+'</div><div class="land-sum-label">Features</div></div>'
-           +'<div class="land-sum-chip"><div class="land-sum-val">'+radius+'mi</div><div class="land-sum-label">Radius</div></div>';
-        // Feature sections
-        var html = '';
-        var bycat = (data && data.by_category) ? data.by_category : {};
-        var catOrder = ['water','winter','outdoor_recreation','protected_land','natural_features','tourism_leisure','infrastructure'];
-        catOrder.forEach(function(cat) {
-            if (!bycat[cat] || !bycat[cat].length) return;
-            var style = LAND_CAT_COLORS[cat] || { bg: 'rgba(255,255,255,0.05)', color: '#aaa' };
-            var label = LAND_CAT_LABELS[cat] || cat;
-            html += '<div class="land-cat-section">'
-                + '<div class="land-cat-header" style="background:'+style.bg+';color:'+style.color+'">'+label+'</div>';
-            bycat[cat].forEach(function(feat) {
-                var text = (typeof feat === 'object') ? (feat.display || feat.label || JSON.stringify(feat)) : feat;
-                html += '<div class="land-feature-item" style="border-left-color:'+style.color+'">'+text+'</div>';
-            });
-            html += '</div>';
-        });
-        document.getElementById('land-body').innerHTML = html || '<div class="land-empty">No feature detail available.</div>';
-        var ts = (data && data.queried_at) ? data.queried_at : '';
-        document.getElementById('land-timestamp').textContent = ts ? 'Scraped: ' + ts : '';
-        document.getElementById('land-panel').classList.add('open');
-    }
-
-    function closeLandPanel() {
-        document.getElementById('land-panel').classList.remove('open');
-    }
-
     function toggleSidebar(){
         var sb=document.getElementById('sidebar');
         sb.classList.toggle('collapsed');
@@ -1737,7 +1183,7 @@
 
         var q   = encodeURIComponent(buildNewsQuery(_newsCurrentName,_newsCurrentCity,_newsCurrentState,_newsCurrentSource));
         var rss = 'https://news.google.com/rss/search?q=' + q + '&hl=en-US&gl=US&ceid=US:en';
-        var url = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(rss);
+        var url = 'https://corsproxy.io/?' + encodeURIComponent(rss);
 
         fetch(url)
             .then(function(r){ if(!r.ok) throw new Error('Proxy '+r.status); return r.text(); })
@@ -1842,7 +1288,7 @@
 
         // EINs stored as floats (e.g. '10357799.0') — parse via float, then zero-pad to 9 digits
         var cleanEin = String(parseInt(parseFloat(String(ein)), 10)).padStart(9, '0');
-        var url = 'https://api.allorigins.win/raw?url=' +
+        var url = 'https://corsproxy.io/?' +
             encodeURIComponent('https://projects.propublica.org/nonprofits/api/v2/organizations/' + cleanEin + '.json');
 
         fetch(url)
