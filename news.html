@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hummingbird — News Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f1117; --surface: #181a20; --surface2: #1e2028; --border: #2a2d37;
+  --text: #e2e4e9; --text2: #8b8fa3; --accent: #6c5ce7; --accent2: #a29bfe;
+  --critical: #ff4757; --high: #ff6b35; --elevated: #ffa502; --moderate: #3b82f6;
+  --low: #10b981; --healthy: #10b981;
+  --font: 'DM Sans', -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+/* ── TOP BAR ── */
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.topbar-left { display: flex; align-items: center; gap: 14px; }
+.topbar-title { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.topbar-sub { font-size: 11px; color: var(--text2); }
+.nav-links { display: flex; gap: 6px; flex-wrap: wrap; }
+.nav-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 11px;
+  border-radius: 6px; border: 1px solid rgba(108,92,231,0.25);
+  background: rgba(108,92,231,0.08); color: var(--accent2);
+  font-family: var(--font); font-size: 11px; font-weight: 600;
+  text-decoration: none; transition: all 0.15s; cursor: pointer;
+}
+.nav-btn:hover { background: rgba(108,92,231,0.18); border-color: rgba(108,92,231,0.5); }
+.nav-btn.active { background: rgba(108,92,231,0.2); border-color: var(--accent); color: #fff; }
+
+/* ── CONTROLS BAR ── */
+.controls {
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.controls select, .controls input {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text);
+  font-family: var(--font); font-size: 11px;
+  padding: 6px 10px; outline: none;
+}
+.controls select { cursor: pointer; }
+.controls input { width: 220px; }
+.controls input:focus { border-color: var(--accent); }
+.run-btn {
+  padding: 7px 16px; background: var(--accent);
+  border: none; border-radius: 6px; color: #fff;
+  font-family: var(--font); font-size: 11px; font-weight: 700;
+  cursor: pointer; transition: opacity 0.2s;
+  display: flex; align-items: center; gap: 6px;
+}
+.run-btn:hover { opacity: 0.85; }
+.run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.spinner { width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.progress-wrap { flex: 1; min-width: 120px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--low)); width: 0%; transition: width 0.3s; border-radius: 2px; }
+.ctrl-stat { font-size: 11px; color: var(--text2); font-family: var(--mono); white-space: nowrap; }
+
+/* ── MAIN LAYOUT ── */
+.main { display: flex; flex: 1; overflow: hidden; }
+
+/* ── LEFT PANEL — Institution List ── */
+.left-panel {
+  width: 300px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.panel-head {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.inst-list { overflow-y: auto; flex: 1; }
+.inst-list::-webkit-scrollbar { width: 3px; }
+.inst-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.inst-row {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.1s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.inst-row:hover { background: var(--surface2); }
+.inst-row.active { background: var(--surface); border-left: 2px solid var(--accent); }
+.inst-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.inst-info { flex: 1; min-width: 0; }
+.inst-name { font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.inst-loc  { font-size: 9px; color: var(--text2); font-family: var(--mono); margin-top: 1px; }
+.inst-temp { font-size: 10px; font-family: var(--mono); flex-shrink: 0; }
+.scanned-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--low); flex-shrink: 0; }
+
+/* ── CENTER PANEL — Boards ── */
+.center-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+.boards { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 20px; }
+.boards::-webkit-scrollbar { width: 4px; }
+.boards::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── SIGNAL TEMPERATURE BAR (full width) ── */
+.signal-spectrum {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 18px;
+}
+.spectrum-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text2);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.spectrum-track {
+  position: relative;
+  height: 6px;
+  background: linear-gradient(90deg, var(--critical) 0%, var(--elevated) 30%, var(--border) 50%, var(--low) 100%);
+  border-radius: 3px;
+  margin: 8px 0 20px;
+}
+.spectrum-center { position: absolute; left: 50%; top: -4px; width: 2px; height: 14px; background: var(--text2); border-radius: 1px; transform: translateX(-50%); }
+.spectrum-dots { position: relative; height: 0; }
+.spectrum-dot-wrap {
+  position: absolute;
+  top: -18px;
+  transform: translateX(-50%);
+  cursor: pointer;
+}
+.spectrum-dot-wrap .sdot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.3);
+  transition: transform 0.15s;
+}
+.spectrum-dot-wrap:hover .sdot { transform: scale(1.6); }
+.spectrum-dot-wrap .sdot-tip {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 9px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 10;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.spectrum-dot-wrap:hover .sdot-tip { opacity: 1; }
+.spectrum-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--text2);
+  font-family: var(--mono);
+  margin-top: 4px;
+}
+
+/* ── ARTICLE BOARDS ── */
+.board {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.board-header {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface2);
+}
+.board-icon { font-size: 14px; }
+.board-title { font-size: 12px; font-weight: 700; }
+.board-count {
+  margin-left: auto;
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--text2);
+  background: var(--bg);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.board-empty {
+  padding: 28px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text2);
+  font-family: var(--mono);
+}
+.article-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1px;
+  background: var(--border);
+}
+.article-card {
+  background: var(--bg);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: background 0.12s;
+  text-decoration: none;
+  display: block;
+}
+.article-card:hover { background: var(--surface2); }
+.article-school {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 4px;
+}
+.article-title {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text);
+  margin-bottom: 5px;
+}
+.article-meta {
+  font-size: 9px;
+  color: var(--text2);
+  font-family: var(--mono);
+  display: flex;
+  gap: 8px;
+}
+.article-source { color: var(--accent2); }
+
+/* ── RIGHT PANEL — School Detail ── */
+.right-panel {
+  width: 340px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface);
+}
+.detail-head {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+.detail-name { font-size: 13px; font-weight: 700; line-height: 1.3; }
+.detail-sub { font-size: 10px; color: var(--text2); margin-top: 3px; font-family: var(--mono); }
+.detail-body { flex: 1; overflow-y: auto; padding: 12px 14px; }
+.detail-body::-webkit-scrollbar { width: 3px; }
+.detail-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.detail-temp-bar {
+  padding: 10px 12px;
+  background: var(--bg);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+.temp-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text2); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; }
+.temp-track { height: 5px; background: var(--border); border-radius: 3px; position: relative; margin-bottom: 4px; }
+.temp-center-mark { position: absolute; left: 50%; top: -3px; width: 2px; height: 11px; background: var(--text2); transform: translateX(-50%); border-radius: 1px; }
+.temp-fill { position: absolute; top: 0; height: 100%; border-radius: 3px; transition: width 0.4s; }
+.temp-score-val { font-size: 18px; font-weight: 700; font-family: var(--mono); }
+.detail-articles { display: flex; flex-direction: column; gap: 6px; }
+.detail-article {
+  padding: 9px 10px;
+  background: var(--bg);
+  border-radius: 7px;
+  border-left: 3px solid var(--border);
+  text-decoration: none;
+  display: block;
+  transition: border-color 0.12s;
+}
+.detail-article:hover { border-left-color: var(--accent2); }
+.detail-article.sig-closure      { border-left-color: var(--critical); }
+.detail-article.sig-accreditation { border-left-color: var(--high); }
+.detail-article.sig-financial    { border-left-color: var(--elevated); }
+.detail-article.sig-enrollment   { border-left-color: var(--moderate); }
+.detail-article.sig-positive     { border-left-color: var(--low); }
+.detail-article-title { font-size: 11px; font-weight: 600; line-height: 1.4; color: var(--text); }
+.detail-article-meta  { font-size: 9px; color: var(--text2); font-family: var(--mono); margin-top: 3px; display: flex; gap: 8px; }
+.detail-empty { padding: 30px 0; text-align: center; font-size: 11px; color: var(--text2); }
+.fetch-btn {
+  width: 100%; padding: 8px; margin-bottom: 10px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--accent2);
+  font-family: var(--font); font-size: 11px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.fetch-btn:hover { border-color: var(--accent); }
+.fetch-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.sig-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.no-data { padding: 60px 20px; text-align: center; color: var(--text2); font-size: 12px; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-title">🐦 News Intelligence</div>
+    <div class="topbar-sub">Hummingbird Ventures · Closure &amp; Signal Monitor</div>
+  </div>
+  <div class="nav-links">
+    <a href="index.html" class="nav-btn">🗺 Map</a>
+    <a href="clusters.html" class="nav-btn">🔬 Clusters</a>
+    <a href="summary.html" class="nav-btn">📊 Summary</a>
+    <a href="scatter3d.html" class="nav-btn">✦ 3D Space</a>
+    <a href="news.html" class="nav-btn active">📡 News</a>
+  </div>
+</div>
+
+<!-- CONTROLS -->
+<div class="controls">
+  <select id="src-sel" onchange="switchSource()">
+    <option value="IPEDS">IPEDS Institutions</option>
+    <option value="990">990 Organizations</option>
+  </select>
+  <select id="type-sel" onchange="renderAll()">
+    <option value="higher_ed">Higher Ed Only</option>
+    <option value="all">All Types</option>
+  </select>
+  <select id="sort-sel" onchange="renderAll()">
+    <option value="distress">Sort: Distress Score</option>
+    <option value="closure_risk">Sort: Closure Risk</option>
+    <option value="name">Sort: Name A–Z</option>
+  </select>
+  <select id="limit-sel">
+    <option value="50">Scan Top 50</option>
+    <option value="100">Scan Top 100</option>
+    <option value="200">Scan Top 200</option>
+    <option value="500">Scan Top 500</option>
+  </select>
+  <input type="text" id="search" placeholder="Search institution..." oninput="renderAll()">
+  <button class="run-btn" id="run-btn" onclick="runScan()">
+    <span id="run-label">⚡ Run Scan</span>
+  </button>
+  <div class="progress-wrap"><div class="progress-fill" id="prog"></div></div>
+  <div class="ctrl-stat" id="ctrl-stat">0 scanned</div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT: Institution list -->
+  <div class="left-panel">
+    <div class="panel-head">
+      <span id="list-count">— institutions</span>
+      <span style="font-size:9px;color:var(--low)" id="scanned-count"></span>
+    </div>
+    <div class="inst-list" id="inst-list"></div>
+  </div>
+
+  <!-- CENTER: Boards -->
+  <div class="center-panel">
+    <div class="boards" id="boards">
+      <!-- Signal Spectrum -->
+      <div class="signal-spectrum">
+        <div class="spectrum-title">
+          <span>Signal Temperature Spectrum — All Scanned Institutions</span>
+          <span style="font-size:9px;color:var(--text2)" id="spectrum-count">Run a scan to populate</span>
+        </div>
+        <div style="position:relative;">
+          <div class="spectrum-track">
+            <div class="spectrum-center"></div>
+          </div>
+          <div class="spectrum-dots" id="spectrum-dots"></div>
+        </div>
+        <div class="spectrum-labels">
+          <span>← Closing / Distressed</span>
+          <span>Neutral</span>
+          <span>Growing / Expanding →</span>
+        </div>
+      </div>
+
+      <!-- Closure Watch -->
+      <div class="board" id="board-closure">
+        <div class="board-header">
+          <span class="board-icon">🚨</span>
+          <span class="board-title" style="color:var(--critical)">Closure Watch</span>
+          <span style="font-size:10px;color:var(--text2)">Closure / M&amp;A articles — regardless of distress score</span>
+          <span class="board-count" id="closure-count">0</span>
+        </div>
+        <div class="board-empty" id="closure-empty">Run a scan to surface closure signals</div>
+        <div class="article-grid" id="closure-grid" style="display:none"></div>
+      </div>
+
+      <!-- Accreditation Watch -->
+      <div class="board" id="board-accred">
+        <div class="board-header">
+          <span class="board-icon">⚠️</span>
+          <span class="board-title" style="color:var(--high)">Accreditation Alerts</span>
+          <span class="board-count" id="accred-count">0</span>
+        </div>
+        <div class="board-empty" id="accred-empty">Run a scan to surface accreditation signals</div>
+        <div class="article-grid" id="accred-grid" style="display:none"></div>
+      </div>
+
+      <!-- Financial Distress -->
+      <div class="board">
+        <div class="board-header">
+          <span class="board-icon">💸</span>
+          <span class="board-title" style="color:var(--elevated)">Financial Distress</span>
+          <span class="board-count" id="financial-count">0</span>
+        </div>
+        <div class="board-empty" id="financial-empty">Run a scan to surface financial signals</div>
+        <div class="article-grid" id="financial-grid" style="display:none"></div>
+      </div>
+
+      <!-- Expansion Watch -->
+      <div class="board">
+        <div class="board-header">
+          <span class="board-icon">📈</span>
+          <span class="board-title" style="color:var(--low)">Expansion &amp; Growth</span>
+          <span class="board-count" id="positive-count">0</span>
+        </div>
+        <div class="board-empty" id="positive-empty">Run a scan to surface positive signals</div>
+        <div class="article-grid" id="positive-grid" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: School detail -->
+  <div class="right-panel" id="right-panel">
+    <div class="no-data">
+      <div style="font-size:32px">📡</div>
+      <div style="font-weight:700;color:var(--text3)">Select an institution</div>
+      <div style="font-size:11px">Click any school to fetch news<br>or run a bulk scan</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── DATA ─────────────────────────────────────────────────────
+var ALL_DATA  = [];
+var SRC       = 'IPEDS';
+var newsCache = {};
+var activeInst = null;
+var scanning  = false;
+
+var HE_TYPES = ['Public | 4-year','Private Non-Profit | 4-year',
+                'Public | 2-year','Private Non-Profit | 2-year',
+                'Private For-Profit | 4-year','Private For-Profit | 2-year',
+                'Public | Admin Unit','Private Non-Profit | Admin Unit',
+                'Private For-Profit | Admin Unit','Religious Institution',
+                'Educational Institution'];
+
+// ── SIGNAL ENGINE (exact copy from master_map2) ───────────────
+var NEWS_SIGNALS = {
+  closure: {
+    label: 'Closure / M&A', color: '#ff4757', weight: -60,
+    keywords: ['closure','closed permanently','closing permanently','closed its doors',
+               'college closing','university closing','campus closing','school closing',
+               'college closed','university closed','campus closed',
+               'is closing down','shut down','shutdown',
+               'teach-out','teach out','ceasing operations','wind down','wind-down',
+               'discontinuing operations','merger','merging with','merged with',
+               'acquisition','acquired by','consolidat',
+               'sale of campus','sell campus','ceases operation',
+               'no longer enrolling','suspending operations',
+               'dissolution','dissolving','dissolved']
+  },
+  accreditation: {
+    label: 'Accreditation', color: '#ff6b35', weight: -35,
+    keywords: ['accreditation','hlc','sacscoc','neche','wscuc','nwccu','neasc','sacs',
+               'probation','sanctions','show cause','warning notice',
+               'loss of accreditation','accreditor','reaffirmation denied',
+               'withdraw accreditation']
+  },
+  financial: {
+    label: 'Financial Distress', color: '#ffa502', weight: -25,
+    keywords: ['budget deficit','budget cut','budget gap','layoff','lay off','restructur',
+               'financial difficult','bankruptcy','default','furlough',
+               'program cut','program eliminat','program suspension',
+               'financial crisis','insolvenc','revenue shortfall','financial strain',
+               'cost-cutting','cost cutting','endowment loss','bond downgrade',
+               'credit downgrade','emergency budget','fiscal crisis',
+               'operating loss','financial trouble','financial challenge']
+  },
+  enrollment: {
+    label: 'Enrollment Decline', color: '#3b82f6', weight: -20,
+    keywords: ['enrollment declin','enrollment drop','enrollment fell','enrollment fall',
+               'declining enrollment','fewer students','student shortage',
+               'falling enrollment','enrollment loss','enrollment down',
+               'admissions declin','yield drop','demographic cliff',
+               'low enrollment','under-enrolled','headcount declin']
+  },
+  positive: {
+    label: 'Positive Signal', color: '#10b981', weight: 25,
+    keywords: ['record enrollment','enrollment growth','enrollment increase','enrollment up',
+               'enrollment rose','new program','expansion','new campus','investment',
+               'grant award','accreditation reaffirm','financial strength','surplus',
+               'endowment growth','endowment increase','partnership','strategic plan',
+               'milestone','excellence','bond upgrade','credit upgrade',
+               'record applicant','applications up','strong demand',
+               'new building','capital campaign','fundraising goal']
+  }
+};
+
+var HE_CONTEXT = ['college','university','campus','enrollment','enroll',
+                  'students','student','faculty','academic','tuition',
+                  'accreditation','financial aid','endowment','semester',
+                  'commencement','institution','higher education','liberal arts'];
+
+function classifyArticle(title, snippet) {
+  var text = ((title||'') + ' ' + (snippet||'')).toLowerCase();
+  var order = ['closure','accreditation','financial','enrollment','positive'];
+  for (var i = 0; i < order.length; i++) {
+    var kws = NEWS_SIGNALS[order[i]].keywords;
+    for (var j = 0; j < kws.length; j++) {
+      if (text.indexOf(kws[j]) >= 0) return order[i];
+    }
+  }
+  return 'general';
+}
+
+function recencyWeight(dateStr) {
+  if (!dateStr) return 0.1;
+  var age = (Date.now() - new Date(dateStr).getTime()) / 86400000;
+  if (age <=  30) return 1.0;
+  if (age <=  90) return 0.6;
+  if (age <= 180) return 0.3;
+  if (age <= 365) return 0.15;
+  return 0.05;
+}
+
+function computeTemperature(articles) {
+  if (!articles || !articles.length) return null;
+  var raw = 0, tw = 0;
+  articles.forEach(function(a) {
+    var sig = NEWS_SIGNALS[a.signal];
+    if (!sig) return;
+    var rw = recencyWeight(a.date);
+    raw += sig.weight * rw;
+    tw  += rw;
+  });
+  if (!tw) return null;
+  return Math.max(-100, Math.min(100, Math.round(raw)));
+}
+
+function tempColor(score) {
+  if (score === null) return 'var(--text2)';
+  if (score <= -30) return 'var(--critical)';
+  if (score <= -10) return 'var(--elevated)';
+  if (score >=  20) return 'var(--low)';
+  return 'var(--text2)';
+}
+
+// ── RSS FETCH ─────────────────────────────────────────────────
+var PROXY = 'https://api.allorigins.win/raw?url=';
+var GN    = 'https://news.google.com/rss/search?q=';
+
+function buildQuery(name, city, state, src) {
+  if (src === 'Hummingbird_990') {
+    var q = name.replace(/\b(INC|LLC|CORP|CORPORATION|FOUNDATION|ASSOCIATION|TRUST|NFP|NPC|LTD|CO|INCORPORATED|LIMITED)\b\.?/gi,'').trim().replace(/\s{2,}/g,' ');
+    var loc = [city,state].filter(Boolean).join(' ');
+    return '"' + q + '" ' + loc;
+  }
+  var loc = [city,state].filter(Boolean).join(' ');
+  return '"' + name + '" ' + loc;
+}
+
+function parseRSS(xml) {
+  var doc = new DOMParser().parseFromString(xml, 'application/xml');
+  var out = [];
+  doc.querySelectorAll('item').forEach(function(item) {
+    var title   = (item.querySelector('title')       ||{}).textContent||'';
+    var link    = (item.querySelector('link')        ||{}).textContent||'';
+    var pubDate = (item.querySelector('pubDate')     ||{}).textContent||'';
+    var snippet = (item.querySelector('description') ||{}).textContent||'';
+    snippet = snippet.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,200);
+    var source='', m=title.match(/^(.*?)\s+-\s+([^-]+)$/);
+    if (m) { title=m[1].trim(); source=m[2].trim(); }
+    var dateStr='';
+    if (pubDate) { var d=new Date(pubDate); if(!isNaN(d)) dateStr=d.toISOString().slice(0,10); }
+    if (!title || title==='[Removed]') return;
+
+    // Higher-ed relevance filter
+    var full = (title+' '+snippet).toLowerCase();
+    var heMatch = HE_CONTEXT.some(function(w){ return full.indexOf(w)>=0; });
+    if (!heMatch) return;
+
+    out.push({
+      title: title, link: link, date: dateStr,
+      source: source, snippet: snippet,
+      signal: classifyArticle(title, snippet)
+    });
+  });
+  return out;
+}
+
+async function fetchNewsFor(inst) {
+  var key = inst.institution_name + '|' + inst.state;
+  if (newsCache[key]) return newsCache[key];
+
+  var q   = buildQuery(inst.institution_name, inst.city, inst.state, inst.data_source);
+  var rss = GN + encodeURIComponent(q) + '&hl=en-US&gl=US&ceid=US:en';
+  var url = PROXY + encodeURIComponent(rss);
+
+  var res  = await fetch(url);
+  var text = await res.text();
+  var arts = parseRSS(text);
+  newsCache[key] = arts;
+  return arts;
+}
+
+// ── DATA LOAD ─────────────────────────────────────────────────
+function loadData() {
+  ALL_DATA = [];
+  newsCache = {};
+  activeInst = null;
+  resetRightPanel();
+
+  var script = document.createElement('script');
+  script.src = SRC === 'IPEDS' ? 'hv_ipeds_data.js' : 'hv_990_data.js';
+  script.onload = function() {
+    ALL_DATA = SRC === 'IPEDS' ? (window.HV_IPEDS||[]) : (window.HV_990||[]);
+    renderAll();
+  };
+  script.onerror = function() {
+    // fallback: tiny sample so page isn't blank
+    ALL_DATA = SAMPLE;
+    renderAll();
+  };
+  var old = document.getElementById('ds');
+  if (old) old.remove();
+  script.id = 'ds';
+  document.head.appendChild(script);
+}
+
+function switchSource() {
+  SRC = document.getElementById('src-sel').value;
+  loadData();
+}
+
+// ── FILTER + SORT ──────────────────────────────────────────────
+function getFiltered() {
+  var type  = document.getElementById('type-sel').value;
+  var sort  = document.getElementById('sort-sel').value;
+  var q     = (document.getElementById('search').value||'').toLowerCase();
+
+  var data = ALL_DATA.filter(function(r) {
+    if (q && r.institution_name.toLowerCase().indexOf(q)<0) return false;
+    if (type === 'higher_ed') {
+      return HE_TYPES.indexOf(r.institution_type) >= 0;
+    }
+    return true;
+  });
+
+  data.sort(function(a,b){
+    if (sort==='name') return a.institution_name.localeCompare(b.institution_name);
+    if (sort==='closure_risk') return (b.closure_risk_score||0)-(a.closure_risk_score||0);
+    return (b.distress_score||0)-(a.distress_score||0);
+  });
+
+  return data;
+}
+
+// ── RENDER LIST ────────────────────────────────────────────────
+function renderAll() {
+  var filtered = getFiltered();
+  document.getElementById('list-count').textContent = filtered.length.toLocaleString() + ' institutions';
+
+  var html = '';
+  filtered.slice(0,500).forEach(function(r) {
+    var key   = r.institution_name + '|' + r.state;
+    var arts  = newsCache[key];
+    var temp  = arts ? computeTemperature(arts) : null;
+    var ds    = r.distress_score != null ? r.distress_score : 0;
+    var dotCol = ds >= 70 ? 'var(--critical)' : ds >= 50 ? 'var(--elevated)' : ds >= 30 ? 'var(--moderate)' : 'var(--text2)';
+
+    html += '<div class="inst-row' + (activeInst===key?' active':'') + '" onclick="selectInst('+JSON.stringify(r.institution_name)+','+JSON.stringify(r.state)+')">';
+    html += '<div class="inst-dot" style="background:'+dotCol+'"></div>';
+    html += '<div class="inst-info"><div class="inst-name">'+esc(r.institution_name)+'</div>';
+    html += '<div class="inst-loc">'+esc(r.city||'')+', '+esc(r.state||'')+'</div></div>';
+    if (temp !== null) {
+      html += '<div class="inst-temp" style="color:'+tempColor(temp)+'">'+(temp>0?'+':'')+temp+'</div>';
+    } else if (arts) {
+      html += '<div style="font-size:9px;color:var(--text2);font-family:var(--mono)">—</div>';
+    }
+    if (arts) html += '<div class="scanned-dot" title="Scanned"></div>';
+    html += '</div>';
+  });
+
+  if (filtered.length > 500) html += '<div style="padding:10px;text-align:center;font-size:10px;color:var(--text2)">+ '+(filtered.length-500)+' more — refine search</div>';
+  document.getElementById('inst-list').innerHTML = html;
+
+  var scanned = Object.keys(newsCache).length;
+  document.getElementById('scanned-count').textContent = scanned ? scanned+' scanned' : '';
+}
+
+// ── SELECT INSTITUTION ─────────────────────────────────────────
+function selectInst(name, state) {
+  var inst = ALL_DATA.find(function(r){ return r.institution_name===name && r.state===state; });
+  if (!inst) return;
+  activeInst = name+'|'+state;
+  renderAll();
+  renderRightPanel(inst);
+}
+
+function renderRightPanel(inst) {
+  var key  = inst.institution_name + '|' + inst.state;
+  var arts = newsCache[key];
+  var temp = arts ? computeTemperature(arts) : null;
+  var ds   = inst.distress_score != null ? inst.distress_score.toFixed(1) : '—';
+  var cr   = inst.closure_risk_score != null ? (inst.closure_risk_score*100).toFixed(0)+'%' : '—';
+
+  var rp = document.getElementById('right-panel');
+  var tempHtml = '';
+  if (temp !== null) {
+    var col = tempColor(temp);
+    var pct = Math.abs(temp)/2;
+    var fillStyle = temp < 0
+      ? 'right:50%;width:'+pct+'%;background:'+col
+      : 'left:50%;width:'+pct+'%;background:'+col;
+    tempHtml = '<div class="detail-temp-bar">'
+      + '<div class="temp-label"><span>Signal Temperature</span>'
+      + '<span class="temp-score-val" style="color:'+col+'">'+(temp>0?'+':'')+temp+'</span></div>'
+      + '<div class="temp-track"><div class="temp-center-mark"></div>'
+      + '<div class="temp-fill" style="'+fillStyle+'"></div></div></div>';
+  }
+
+  var artHtml = '';
+  if (!arts) {
+    artHtml = '<button class="fetch-btn" id="fetch-btn" onclick="fetchSingle('+JSON.stringify(inst.institution_name)+','+JSON.stringify(inst.state)+')">📡 Fetch News</button>';
+  } else if (!arts.length) {
+    artHtml = '<div class="detail-empty">No relevant news found.</div>';
+  } else {
+    artHtml = '<div class="detail-articles">' + arts.map(function(a) {
+      var sig = NEWS_SIGNALS[a.signal];
+      var col = sig ? sig.color : 'var(--border)';
+      return '<a class="detail-article sig-'+a.signal+'" href="'+a.link+'" target="_blank" rel="noopener">'
+        + '<div class="detail-article-title">'+esc(a.title)+'</div>'
+        + '<div class="detail-article-meta">'
+        + '<span style="color:'+col+';font-weight:700">'+(sig?sig.label:'General')+'</span>'
+        + (a.source ? '<span style="color:var(--accent2)">'+esc(a.source)+'</span>' : '')
+        + (a.date ? '<span>'+a.date+'</span>' : '')
+        + '</div></a>';
+    }).join('') + '</div>';
+  }
+
+  rp.innerHTML = '<div class="detail-head">'
+    + '<div class="detail-name">'+esc(inst.institution_name)+'</div>'
+    + '<div class="detail-sub">'+esc(inst.city||'')+', '+esc(inst.state||'')+' · '+esc(inst.institution_type||'')+'</div>'
+    + '<div style="display:flex;gap:12px;margin-top:6px;font-size:10px;font-family:var(--mono)">'
+    + '<span>Distress: <b style="color:var(--elevated)">'+ds+'</b></span>'
+    + '<span>Closure Risk: <b style="color:var(--critical)">'+cr+'</b></span>'
+    + '</div></div>'
+    + '<div class="detail-body">'+tempHtml+artHtml+'</div>';
+}
+
+async function fetchSingle(name, state) {
+  var inst = ALL_DATA.find(function(r){ return r.institution_name===name && r.state===state; });
+  if (!inst) return;
+  var btn = document.getElementById('fetch-btn');
+  if (btn) { btn.disabled=true; btn.innerHTML='<div class="spinner"></div> Fetching...'; }
+  try {
+    await fetchNewsFor(inst);
+    renderAll();
+    renderRightPanel(inst);
+    updateBoards();
+    updateSpectrum();
+  } catch(e) {
+    if (btn) { btn.disabled=false; btn.innerHTML='📡 Retry'; }
+  }
+}
+
+function resetRightPanel() {
+  document.getElementById('right-panel').innerHTML = '<div class="no-data"><div style="font-size:32px">📡</div><div style="font-weight:700;color:var(--text3)">Select an institution</div><div style="font-size:11px">Click any school to fetch news<br>or run a bulk scan</div></div>';
+}
+
+// ── BULK SCAN ──────────────────────────────────────────────────
+async function runScan() {
+  if (scanning) return;
+  scanning = true;
+
+  var btn   = document.getElementById('run-btn');
+  var label = document.getElementById('run-label');
+  btn.disabled = true;
+  label.innerHTML = '<div class="spinner"></div> Scanning...';
+
+  var limit   = parseInt(document.getElementById('limit-sel').value);
+  var targets = getFiltered().slice(0, limit);
+  var prog    = document.getElementById('prog');
+  var stat    = document.getElementById('ctrl-stat');
+
+  for (var i = 0; i < targets.length; i++) {
+    var inst = targets[i];
+    prog.style.width = ((i+1)/targets.length*100)+'%';
+    stat.textContent = (i+1)+' / '+targets.length+' scanned';
+
+    try { await fetchNewsFor(inst); } catch(e) {}
+
+    // Rate limit: ~1 req/sec to be safe with allorigins
+    await sleep(1100);
+  }
+
+  scanning = false;
+  btn.disabled = false;
+  label.textContent = '⚡ Re-Scan';
+  prog.style.width = '100%';
+  stat.textContent = targets.length+' scanned';
+
+  renderAll();
+  updateBoards();
+  updateSpectrum();
+}
+
+// ── BOARDS ─────────────────────────────────────────────────────
+function updateBoards() {
+  var boards = { closure:[], accreditation:[], financial:[], enrollment:[], positive:[] };
+
+  Object.keys(newsCache).forEach(function(key) {
+    var parts = key.split('|');
+    var name  = parts[0], state = parts[1];
+    var inst  = ALL_DATA.find(function(r){ return r.institution_name===name && r.state===state; });
+    if (!inst) return;
+    var arts  = newsCache[key];
+
+    arts.forEach(function(a) {
+      if (boards[a.signal]) {
+        boards[a.signal].push({ inst: inst, article: a });
+      }
+    });
+  });
+
+  // Sort each board: closure first by recency
+  Object.keys(boards).forEach(function(sig) {
+    boards[sig].sort(function(a,b){ return (b.article.date||'').localeCompare(a.article.date||''); });
+  });
+
+  renderBoard('closure',      boards.closure,       'closure-grid',    'closure-empty',    'closure-count');
+  renderBoard('accreditation',boards.accreditation, 'accred-grid',     'accred-empty',     'accred-count');
+  renderBoard('financial',    boards.financial,     'financial-grid',  'financial-empty',  'financial-count');
+  renderBoard('positive',     boards.positive,      'positive-grid',   'positive-empty',   'positive-count');
+}
+
+function renderBoard(sig, items, gridId, emptyId, countId) {
+  var grid  = document.getElementById(gridId);
+  var empty = document.getElementById(emptyId);
+  var count = document.getElementById(countId);
+
+  count.textContent = items.length;
+
+  if (!items.length) {
+    grid.style.display  = 'none';
+    empty.style.display = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  grid.style.display  = '';
+  var sigMeta = NEWS_SIGNALS[sig] || { color: 'var(--text2)' };
+
+  grid.innerHTML = items.slice(0,40).map(function(item) {
+    return '<a class="article-card" href="'+item.article.link+'" target="_blank" rel="noopener">'
+      + '<div class="article-school" style="color:'+sigMeta.color+'">'+esc(item.inst.institution_name)+' · '+esc(item.inst.state||'')+'</div>'
+      + '<div class="article-title">'+esc(item.article.title)+'</div>'
+      + '<div class="article-meta">'
+      + (item.article.source?'<span class="article-source">'+esc(item.article.source)+'</span>':'')
+      + (item.article.date?'<span>'+item.article.date+'</span>':'')
+      + '<span style="color:'+(item.inst.distress_score>=60?'var(--critical)':'var(--text2)')+'">Distress: '+(item.inst.distress_score!=null?item.inst.distress_score.toFixed(0):'—')+'</span>'
+      + '</div></a>';
+  }).join('');
+
+  if (items.length > 40) {
+    grid.innerHTML += '<div style="padding:12px;text-align:center;font-size:10px;color:var(--text2);grid-column:1/-1">+ '+(items.length-40)+' more articles</div>';
+  }
+}
+
+// ── SPECTRUM ───────────────────────────────────────────────────
+function updateSpectrum() {
+  var scanned = [];
+  Object.keys(newsCache).forEach(function(key) {
+    var parts = key.split('|');
+    var name  = parts[0], state = parts[1];
+    var inst  = ALL_DATA.find(function(r){ return r.institution_name===name && r.state===state; });
+    if (!inst) return;
+    var temp = computeTemperature(newsCache[key]);
+    if (temp === null) return;
+    scanned.push({ inst: inst, temp: temp });
+  });
+
+  document.getElementById('spectrum-count').textContent = scanned.length + ' institutions plotted';
+
+  if (!scanned.length) {
+    document.getElementById('spectrum-dots').innerHTML = '';
+    return;
+  }
+
+  var html = '';
+  scanned.forEach(function(s) {
+    // Map -100..+100 to 0..100% on the track
+    var pct = (s.temp + 100) / 200 * 100;
+    var col = tempColor(s.temp);
+    html += '<div class="spectrum-dot-wrap" style="left:'+pct+'%" onclick="selectInst('+JSON.stringify(s.inst.institution_name)+','+JSON.stringify(s.inst.state)+')">'
+      + '<div class="sdot" style="background:'+col+'"></div>'
+      + '<div class="sdot-tip">'+esc(s.inst.institution_name)+' ('+s.inst.state+')<br>Score: '+(s.temp>0?'+':'')+s.temp+'</div>'
+      + '</div>';
+  });
+  document.getElementById('spectrum-dots').innerHTML = html;
+}
+
+// ── UTILS ──────────────────────────────────────────────────────
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function sleep(ms) { return new Promise(function(r){ setTimeout(r,ms); }); }
+
+// ── SAMPLE FALLBACK ────────────────────────────────────────────
+var SAMPLE = [
+  {institution_name:'Sterling College',city:'Craftsbury Common',state:'Vermont',institution_type:'Private Non-Profit | 4-year',data_source:'IPEDS',distress_score:61.1,closure_risk_score:0.704},
+  {institution_name:'Birmingham-Southern College',city:'Birmingham',state:'Alabama',institution_type:'Private Non-Profit | 4-year',data_source:'IPEDS',distress_score:82.3,closure_risk_score:0.91},
+  {institution_name:'Sweet Briar College',city:'Sweet Briar',state:'Virginia',institution_type:'Private Non-Profit | 4-year',data_source:'IPEDS',distress_score:55.2,closure_risk_score:0.62},
+];
+
+// ── BOOT ───────────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>
