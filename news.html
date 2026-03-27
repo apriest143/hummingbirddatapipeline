@@ -664,7 +664,7 @@ function loadData() {
   resetRightPanel();
 
   var script = document.createElement('script');
-  script.src = SRC === 'IPEDS' ? 'hv_master_data/hv_ipeds_data.js' : 'hv_master_data/hv_990_data.js';
+  script.src = SRC === 'IPEDS' ? 'hv_ipeds_data.js' : 'hv_990_data.js';
   script.onload = function() {
     ALL_DATA = SRC === 'IPEDS' ? (window.HV_IPEDS||[]) : (window.HV_990||[]);
     renderAll();
