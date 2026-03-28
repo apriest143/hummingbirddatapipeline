@@ -559,80 +559,115 @@ def score_all(rows):
 # Self-test
 # ---------------------------------------------------------------------------
 if __name__ == '__main__':
-    test_cases = [
-        {
-            'institution_name': 'Vermont Rural College (test)',
-            'state': 'Vermont',
-            'urbanization': 'Rural: Remote',
-            'accreditation_agency': 'New England Commission of Higher Education',
-            'distress_score': '72',
-            'closure_risk_score': '0.55',
-            'distress_category': 'High',
-            'data_source': 'IPEDS',
-            'flag_negative_net_worth': '1',
-            'flag_enrollment_decline': '1',
-            'flag_operating_losses': '1',
-            'acreage_primary': '166',
-        },
-        {
-            'institution_name': 'NYC Urban College (test)',
-            'state': 'New York',
-            'urbanization': 'City: Large',
-            'accreditation_agency': 'Middle States Commission on Higher Education',
-            'distress_score': '25',
-            'closure_risk_score': '0.12',
-            'distress_category': 'Low',
-            'data_source': 'IPEDS',
-            'flag_negative_net_worth': '0',
-            'flag_enrollment_decline': '0',
-            'flag_operating_losses': '0',
-            'acreage_primary': '12',
-        },
-        {
-            'institution_name': 'Montana Small Town College (test)',
-            'state': 'Montana',
-            'urbanization': 'Town: Distant',
-            'accreditation_agency': 'Northwest Commission on Colleges and Universities',
-            'distress_score': '55',
-            'closure_risk_score': '0.38',
-            'distress_category': 'High',
-            'data_source': 'IPEDS',
-            'flag_negative_net_worth': '0',
-            'flag_enrollment_decline': '1',
-            'flag_operating_losses': '1',
-            'acreage_primary': '280',
-        },
-        {
-            'institution_name': 'Colorado Suburban Campus (test)',
-            'state': 'Colorado',
-            'urbanization': 'Suburb: Large',
-            'accreditation_agency': 'Higher Learning Commission',
-            'distress_score': '40',
-            'closure_risk_score': '0.25',
-            'distress_category': 'Moderate',
-            'data_source': 'IPEDS',
-            'flag_negative_net_worth': '1',
-            'flag_enrollment_decline': '0',
-            'flag_operating_losses': '1',
-            'acreage_primary': '45',
-        },
+    import argparse, csv as _csv, sys
+
+    _csv.field_size_limit(100 * 1024 * 1024)
+
+    parser = argparse.ArgumentParser(description='Compute Partnership Readiness Scores')
+    parser.add_argument('--input',  default='hv_master_data/data/Hummingbird_Master_Combined_v6.csv')
+    parser.add_argument('--output', default=None, help='Output CSV path (default: overwrite input)')
+    parser.add_argument('--test',   action='store_true', help='Run self-test only')
+    args = parser.parse_args()
+
+    if args.test:
+        # ── Self-test ──────────────────────────────────────────────────────────
+        test_cases = [
+            {
+                'institution_name': 'Vermont Rural College (test)',
+                'state': 'Vermont', 'urbanization': 'Rural: Remote',
+                'accreditation_agency': 'New England Commission of Higher Education',
+                'distress_score': '72', 'closure_risk_score': '0.55',
+                'distress_category': 'High', 'data_source': 'IPEDS',
+                'flag_negative_net_worth': '1', 'flag_enrollment_decline': '1',
+                'flag_operating_losses': '1', 'acreage_primary': '166',
+            },
+            {
+                'institution_name': 'NYC Urban College (test)',
+                'state': 'New York', 'urbanization': 'City: Large',
+                'accreditation_agency': 'Middle States Commission on Higher Education',
+                'distress_score': '25', 'closure_risk_score': '0.12',
+                'distress_category': 'Low', 'data_source': 'IPEDS',
+                'flag_negative_net_worth': '0', 'flag_enrollment_decline': '0',
+                'flag_operating_losses': '0', 'acreage_primary': '12',
+            },
+            {
+                'institution_name': 'Montana Small Town College (test)',
+                'state': 'Montana', 'urbanization': 'Town: Distant',
+                'accreditation_agency': 'Northwest Commission on Colleges and Universities',
+                'distress_score': '55', 'closure_risk_score': '0.38',
+                'distress_category': 'High', 'data_source': 'IPEDS',
+                'flag_negative_net_worth': '0', 'flag_enrollment_decline': '1',
+                'flag_operating_losses': '1', 'acreage_primary': '280',
+            },
+            {
+                'institution_name': 'Colorado Suburban Campus (test)',
+                'state': 'Colorado', 'urbanization': 'Suburb: Large',
+                'accreditation_agency': 'Higher Learning Commission',
+                'distress_score': '40', 'closure_risk_score': '0.25',
+                'distress_category': 'Moderate', 'data_source': 'IPEDS',
+                'flag_negative_net_worth': '1', 'flag_enrollment_decline': '0',
+                'flag_operating_losses': '1', 'acreage_primary': '45',
+            },
+        ]
+        print("Partnership Readiness Score v2 — Self Test")
+        print("=" * 70)
+        for t in test_cases:
+            s = compute_partnership_score(t)
+            print(f"\n{t['institution_name']}")
+            print(f"  State: {t['state']} | Urb: {t['urbanization']}")
+            print(f"  BEA outdoor GDP: {s['pr_bea_outdoor_pct']}% | WICHE cliff: {s['pr_wiche_cliff_pct']}% | Closures: {s['pr_state_closures']}")
+            print(f"  Axis 1 (State Policy):   {s['pr_state_policy_score']:3d}/28  "
+                  f"[outdoor={s['pr_outdoor_economy_pts']} cliff={s['pr_enrollment_cliff_pts']} closures={s['pr_closure_activity_pts']}]")
+            print(f"  Axis 2 (Funding):        {s['pr_funding_score']:3d}/24  "
+                  f"[rural={s['pr_rural_access_pts']} funding={s['pr_state_funding_pts']} accred={s['pr_accreditor_pts']}]")
+            print(f"  Axis 3 (Gov/Urgency):    {s['pr_governance_score']:3d}/28  "
+                  f"[traj={s['pr_distress_traj_pts']} community={s['pr_community_pts']} flags={s['pr_flags_pts']}]")
+            print(f"  Axis 4 (Asset Value):    {s['pr_asset_value_score']:3d}/20  "
+                  f"[re_market={s['pr_re_market_pts']} acreage={s['pr_acreage_pts']} land_type={s['pr_land_type_pts']}]  "
+                  f"acres={s['pr_acreage_used']} re_tier={s['pr_re_tier']}")
+            print(f"  {'─'*37}")
+            print(f"  TOTAL: {s['partnership_readiness_score']:3d}/100  → {s['pr_label']}")
+        sys.exit(0)
+
+    # ── Batch mode: score full master CSV ─────────────────────────────────────
+    out_path = args.output or args.input
+    print(f"Loading {args.input}...")
+
+    with open(args.input, newline='', encoding='utf-8', errors='replace') as f:
+        reader = _csv.DictReader(f)
+        fieldnames = reader.fieldnames
+        rows = list(reader)
+
+    print(f"Scoring {len(rows):,} institutions...")
+
+    PR_COLS = [
+        'partnership_readiness_score', 'pr_label',
+        'pr_state_policy_score', 'pr_funding_score',
+        'pr_governance_score',   'pr_asset_value_score',
+        'pr_outdoor_economy_pts', 'pr_enrollment_cliff_pts', 'pr_closure_activity_pts',
+        'pr_rural_access_pts',    'pr_state_funding_pts',    'pr_accreditor_pts',
+        'pr_distress_traj_pts',   'pr_community_pts',        'pr_flags_pts',
+        'pr_re_market_pts',       'pr_acreage_pts',          'pr_land_type_pts',
+        'pr_bea_outdoor_pct',     'pr_wiche_cliff_pct',      'pr_state_closures',
+        'pr_re_tier',             'pr_acreage_used',
     ]
 
-    print("Partnership Readiness Score — Self Test")
-    print("=" * 70)
-    for t in test_cases:
-        s = compute_partnership_score(t)
-        print(f"\n{t['institution_name']}")
-        print(f"  State: {t['state']} | Urb: {t['urbanization']}")
-        print(f"  BEA outdoor GDP: {s['pr_bea_outdoor_pct']}% | WICHE cliff: {s['pr_wiche_cliff_pct']}% | Closures: {s['pr_state_closures']}")
-        print(f"  Axis 1 (State Policy):   {s['pr_state_policy_score']:3d}/28  "
-              f"[outdoor={s['pr_outdoor_economy_pts']} cliff={s['pr_enrollment_cliff_pts']} closures={s['pr_closure_activity_pts']}]")
-        print(f"  Axis 2 (Funding):        {s['pr_funding_score']:3d}/24  "
-              f"[rural={s['pr_rural_access_pts']} funding={s['pr_state_funding_pts']} accred={s['pr_accreditor_pts']}]")
-        print(f"  Axis 3 (Gov/Urgency):    {s['pr_governance_score']:3d}/28  "
-              f"[traj={s['pr_distress_traj_pts']} community={s['pr_community_pts']} flags={s['pr_flags_pts']}]")
-        print(f"  Axis 4 (Asset Value):    {s['pr_asset_value_score']:3d}/20  "
-              f"[re_market={s['pr_re_market_pts']} acreage={s['pr_acreage_pts']} land_type={s['pr_land_type_pts']}]  "
-              f"acres={s['pr_acreage_used']} re_tier={s['pr_re_tier']}")
-        print(f"  ─────────────────────────────────────")
-        print(f"  TOTAL: {s['partnership_readiness_score']:3d}/100  → {s['pr_label']}")
+    # Add new columns to fieldnames if not present
+    out_fields = list(fieldnames)
+    for col in PR_COLS:
+        if col not in out_fields:
+            out_fields.append(col)
+
+    scored = score_all(rows)
+
+    with open(out_path, 'w', newline='', encoding='utf-8') as f:
+        writer = _csv.DictWriter(f, fieldnames=out_fields, extrasaction='ignore')
+        writer.writeheader()
+        writer.writerows(scored)
+
+    print(f"Done. Written to {out_path}")
+    # Quick sanity check
+    sample = [r for r in scored if r.get('partnership_readiness_score')]
+    if sample:
+        avg = sum(float(r['partnership_readiness_score']) for r in sample) / len(sample)
+        print(f"  Average PR score: {avg:.1f}  |  Scored: {len(sample):,} / {len(rows):,}")
