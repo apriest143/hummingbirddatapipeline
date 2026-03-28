@@ -129,6 +129,14 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
 .center-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
 .boards { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 20px; }
+.board { display: flex; flex-direction: column; max-height: 500px; }
+.article-grid { overflow-y: auto; flex: 1; }
+.article-grid::-webkit-scrollbar { width: 3px; }
+.article-grid::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.board { display: flex; flex-direction: column; max-height: 500px; }
+.article-grid { overflow-y: auto; flex: 1; }
+.article-grid::-webkit-scrollbar { width: 3px; }
+.article-grid::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 .boards::-webkit-scrollbar { width: 4px; }
 .boards::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
@@ -398,6 +406,14 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
     <div class="panel-head">
       <span id="list-count">— institutions</span>
       <span style="font-size:9px;color:var(--low)" id="scanned-count"></span>
+    </div>
+    <div style="padding:8px;border-bottom:1px solid var(--border);background:var(--surface2);">
+      <input type="text" id="left-search" placeholder="Search institutions..." oninput="renderAll()"
+        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--font);font-size:11px;padding:5px 8px;outline:none;">
+    </div>
+    <div style="padding:8px;border-bottom:1px solid var(--border);background:var(--surface2);">
+      <input type="text" id="left-search" placeholder="Search institutions..." oninput="renderAll()"
+        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--font);font-size:11px;padding:5px 8px;outline:none;">
     </div>
     <div class="inst-list" id="inst-list"></div>
   </div>
@@ -682,7 +698,7 @@ function switchSource() {
 function getFiltered() {
   var type  = document.getElementById('type-sel').value;
   var sort  = document.getElementById('sort-sel').value;
-  var q     = (document.getElementById('search').value||'').toLowerCase();
+  var ls = document.getElementById('left-search'); var q = ((ls ? ls.value : '') || (document.getElementById('search') ? document.getElementById('search').value : '') || '').toLowerCase();
 
   var data = ALL_DATA.filter(function(r) {
     if (q && r.institution_name.toLowerCase().indexOf(q)<0) return false;
@@ -834,9 +850,10 @@ async function runScan() {
     prog.style.width = ((i+1)/targets.length*100)+'%';
     stat.textContent = (i+1)+' / '+targets.length+' scanned';
 
-    try { await fetchNewsFor(inst); } catch(e) {}
-
-    // Rate limit: ~1 req/sec to be safe with allorigins
+    try {
+      await fetchNewsFor(inst);
+      renderAll(); updateBoards(); updateSpectrum();
+    } catch(e) {}
     await sleep(1100);
   }
 
