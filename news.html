@@ -215,6 +215,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+  max-height: 600px;
 }
 .board-header {
   padding: 10px 14px;
@@ -247,7 +251,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1px;
   background: var(--border);
+  overflow-y: auto;
+  flex: 1;
 }
+.article-grid::-webkit-scrollbar { width: 3px; }
+.article-grid::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 .article-card {
   background: var(--bg);
   padding: 12px 14px;
@@ -390,7 +398,6 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
     <option value="200">Scan Top 200</option>
     <option value="500">Scan Top 500</option>
   </select>
-  <input type="text" id="search" placeholder="Search institution..." oninput="renderAll()">
   <button class="run-btn" id="run-btn" onclick="runScan()">
     <span id="run-label">⚡ Run Scan</span>
   </button>
@@ -414,6 +421,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
     <div style="padding:8px;border-bottom:1px solid var(--border);background:var(--surface2);">
       <input type="text" id="left-search" placeholder="Search institutions..." oninput="renderAll()"
         style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--font);font-size:11px;padding:5px 8px;outline:none;">
+    </div>
+    <div style="padding:8px;border-bottom:1px solid var(--border);background:var(--surface2);">
+      <input type="text" id="search" placeholder="Search institutions..." oninput="renderAll()"
+        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;
+               color:var(--text);font-family:var(--font);font-size:11px;padding:5px 8px;outline:none;">
     </div>
     <div class="inst-list" id="inst-list"></div>
   </div>
