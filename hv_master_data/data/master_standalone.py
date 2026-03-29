@@ -103,6 +103,13 @@ KEEP_COLUMNS = [
     # BMF metadata
     'subsection_code_bmf', 'ruling_date', 'eo_status_bmf',
     'filing_type_primary', 'fte_staff',
+
+    # Partnership Readiness (pre-computed by partnership_readiness.py)
+    'partnership_readiness_score', 'pr_label',
+    'pr_state_policy_score', 'pr_funding_score',
+    'pr_governance_score', 'pr_asset_value_score',
+    'pr_re_tier', 'pr_acreage_used',
+    'pr_bea_outdoor_pct', 'pr_wiche_cliff_pct', 'pr_state_closures',
 ]
 
 # OSM feature categories — must match osm_features.py
