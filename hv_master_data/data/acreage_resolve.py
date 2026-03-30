@@ -169,19 +169,21 @@ def load_scraper(path):
 
 
 def merge_scraper(rows, by_composite, by_name):
-    """Merge scraper data into master rows. Only fills — does not overwrite."""
+    """Merge scraper data into master rows. Always overwrites to fix collision issues."""
     filled = 0
     for row in rows:
         name  = row.get('institution_name', '').strip()
         city  = row.get('city', '').strip()
         state = row.get('state', '').strip()
 
-        # Skip if master already has scraper data
-        if sf(row.get('scraper_acres')):
-            continue
-
-        # Try composite key first, then name fallback
-        s = by_composite.get((name, city, state)) or by_name.get(name)
+        # Always try composite key first — DO NOT fall back to name-only
+        # Name-only fallback causes collisions (Sterling KS data → Sterling VT)
+        s = by_composite.get((name, city, state))
+        if not s:
+            # Only use name fallback if no collision risk (unique name)
+            candidates = [k for k in by_composite if k[0] == name]
+            if len(candidates) == 1:
+                s = by_composite[candidates[0]]
         if not s:
             continue
 
@@ -207,34 +209,48 @@ def merge_scraper(rows, by_composite, by_name):
 
 def load_osm(path):
     """
-    Returns dict keyed by institution_name → row.
-    osm_results.csv predates composite key fix so name-only is all we have.
+    Returns (by_composite, by_name) dicts for OSM acreage.
+    by_composite keyed by (name, city, state) using lat/lon proximity to master.
+    by_name keyed by institution_name as fallback.
+    master_loc: dict of {institution_name: (city, state, lat, lon)} from master.
     """
     if not os.path.exists(path):
         print(f'  WARNING: OSM file not found: {path}')
-        return {}
+        return {}, {}
 
+    by_composite = {}
     by_name = {}
+    # osm_results.csv now has city/state columns — use them directly
     with open(path, newline='', encoding='utf-8', errors='replace') as f:
         for row in csv.DictReader(f):
-            name = row.get('institution_name', '').strip()
-            if name and sf(row.get('osm_acres')):
-                by_name[name] = row
+            name  = row.get('institution_name', '').strip()
+            city  = row.get('city', '').strip()
+            state = row.get('state', '').strip()
+            if not name or not sf(row.get('osm_acres')):
+                continue
+            by_name[name] = row
+            by_composite[(name, city, state)] = row
 
-    print(f'  OSM: {len(by_name):,} valid rows loaded')
-    return by_name
+    print(f'  OSM acreage: {len(by_name):,} valid rows  ({len(by_composite):,} composite keys)')
+    return by_composite, by_name
 
 
-def merge_osm(rows, by_name):
-    """Merge OSM acreage into master rows. Only fills — does not overwrite."""
+def merge_osm(rows, by_composite, by_name):
+    """Merge OSM acreage into master rows. Always overwrites. Uses composite key."""
     filled = 0
     for row in rows:
-        name = row.get('institution_name', '').strip()
+        name  = row.get('institution_name', '').strip()
+        city  = row.get('city', '').strip()
+        state = row.get('state', '').strip()
 
-        if sf(row.get('osm_acres')):
-            continue
-
-        o = by_name.get(name)
+        # Try composite key first, then name only if unambiguous
+        o = by_composite.get((name, city, state))
+        if not o:
+            candidates = [k for k in by_composite if k[0] == name]
+            if len(candidates) == 1:
+                o = by_composite[candidates[0]]
+            elif not candidates:
+                o = by_name.get(name)
         if not o:
             continue
 
@@ -479,11 +495,8 @@ def main():
     scraper_composite, scraper_name = load_scraper(SCRAPER_FILE)
 
     # ── Step 2: Load OSM data ─────────────────────────────────────────────────
-    print(f'\nStep 2: Loading OSM acreage data...')
-    osm_by_name = load_osm(OSM_FILE)
-
-    # ── Step 3: Load HIFLD ────────────────────────────────────────────────────
-    print(f'\nStep 3: Loading HIFLD polygon data...')
+    # ── Step 2: Load HIFLD (OSM loaded after master so we can pass loc lookup) ─
+    print(f'\nStep 2: Loading HIFLD polygon data...')
     hifld_records = load_hifld(HIFLD_FILE)
     hifld_indexes = build_hifld_indexes(hifld_records)
 
@@ -513,12 +526,16 @@ def main():
             fieldnames.append(col)
 
     # ── Merge scraper ─────────────────────────────────────────────────────────
+    # ── Load OSM acreage (after master so we can pass name→loc lookup) ─────────
+    print(f'\nStep 3: Loading OSM acreage data...')
+    osm_composite, osm_by_name = load_osm(OSM_FILE)
+
     print(f'\nMerging scraper data...')
     rows = merge_scraper(rows, scraper_composite, scraper_name)
 
     # ── Merge OSM ─────────────────────────────────────────────────────────────
     print(f'\nMerging OSM acreage data...')
-    rows = merge_osm(rows, osm_by_name)
+    rows = merge_osm(rows, osm_composite, osm_by_name)
 
     # ── HIFLD + resolve + weighted ────────────────────────────────────────────
     print(f'\nStep 4-6: HIFLD matching, primary resolution, weighted average, land flags...')
