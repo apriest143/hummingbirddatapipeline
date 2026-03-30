@@ -103,13 +103,6 @@ KEEP_COLUMNS = [
     # BMF metadata
     'subsection_code_bmf', 'ruling_date', 'eo_status_bmf',
     'filing_type_primary', 'fte_staff',
-
-    # Partnership Readiness (pre-computed by partnership_readiness.py)
-    'partnership_readiness_score', 'pr_label',
-    'pr_state_policy_score', 'pr_funding_score',
-    'pr_governance_score', 'pr_asset_value_score',
-    'pr_re_tier', 'pr_acreage_used',
-    'pr_bea_outdoor_pct', 'pr_wiche_cliff_pct', 'pr_state_closures',
 ]
 
 # OSM feature categories — must match osm_features.py
@@ -259,12 +252,12 @@ def parse_osm_feature_string(feat_str):
     return by_category
 
 
-def build_osm_lookup(osm_path, urb_lookup=None):
+def build_osm_lookup(osm_path, urb_lookup=None, name_to_loc=None):
     """
-    Read osm_land_results.csv and return a dict keyed by institution_name.
-    Only rows with a valid timestamp (i.e. not ERROR, not incomplete) are included.
-    urb_lookup: optional dict of {institution_name: urbanization_string} used to
-    apply urban context penalty to environment scores.
+    Read osm_land_results.csv and return a dict keyed by name||city||state.
+    Uses composite key to avoid collision between same-name institutions.
+    urb_lookup: optional dict of {name||city||state: urbanization_string}
+    name_to_loc: dict of {institution_name: (city, state)} from master records
     """
     if not os.path.exists(osm_path):
         print(f"  OSM file not found: {osm_path} — skipping land data")
@@ -272,6 +265,9 @@ def build_osm_lookup(osm_path, urb_lookup=None):
 
     # Some feature strings exceed Python's default CSV field limit (131072 bytes)
     csv.field_size_limit(10 * 1024 * 1024)  # 10MB — safely above any real row
+
+    # name_to_loc maps name → list of (city, state) tuples (could be multiple)
+    _name_loc = name_to_loc or {}
 
     lookup = {}
     with open(osm_path, newline='', encoding='utf-8') as f:
@@ -287,23 +283,28 @@ def build_osm_lookup(osm_path, urb_lookup=None):
 
             _count  = int(str(row.get('osm_env_count', '0') or '0').strip()) if str(row.get('osm_env_count', '0') or '0').strip().lstrip('-').isdigit() else 0
             _radius = row.get('osm_env_radius_miles', '20')
-            _urb = (urb_lookup or {}).get(name)
-            _env_score = _osm_scorer.score_osm_environment(
-                by_cat, feature_count=_count, radius_miles=_radius,
-                urbanization=_urb
-            ) if _osm_scorer else {'score': None, 'feature_score': None,
-                                   'category_score': None, 'density_bonus': None,
-                                   'radius_bonus': None, 'context_mult': None,
-                                   'breakdown': [], 'top_features': [],
-                                   'has_osm_data': bool(by_cat)}
-            lookup[name] = {
-                'categories':  cats_raw,
-                'count':       _count,
-                'radius_miles': _radius,
-                'queried_at':  queried,
-                'by_category': by_cat,
-                'env_score':   _env_score,
-            }
+
+            # Build composite keys for all (city, state) combos this name maps to
+            locations = _name_loc.get(name, [('', '')])
+            for (city, state) in locations:
+                composite_key = f"{name}||{city}||{state}"
+                _urb = (urb_lookup or {}).get(composite_key) or (urb_lookup or {}).get(name)
+                _env_score = _osm_scorer.score_osm_environment(
+                    by_cat, feature_count=_count, radius_miles=_radius,
+                    urbanization=_urb
+                ) if _osm_scorer else {'score': None, 'feature_score': None,
+                                       'category_score': None, 'density_bonus': None,
+                                       'radius_bonus': None, 'context_mult': None,
+                                       'breakdown': [], 'top_features': [],
+                                       'has_osm_data': bool(by_cat)}
+                lookup[composite_key] = {
+                    'categories':  cats_raw,
+                    'count':       _count,
+                    'radius_miles': _radius,
+                    'queried_at':  queried,
+                    'by_category': by_cat,
+                    'env_score':   _env_score,
+                }
 
     return lookup
 
@@ -373,10 +374,24 @@ def main():
 
     # ── Load OSM land data ───────────────────────────────────────────────────
     print(f'\nLoading OSM land data: {OSM_FILE}')
-    # Build name→urbanization lookup so scorer can apply urban context penalty
-    urb_lookup = {r['institution_name']: r.get('urbanization','')
-                  for r in records if r.get('institution_name')}
-    osm_lookup = build_osm_lookup(OSM_FILE, urb_lookup=urb_lookup)
+    # Build name→[(city,state)] lookup for composite key resolution
+    from collections import defaultdict
+    _name_to_loc = defaultdict(list)
+    for r in records:
+        n = (r.get('institution_name') or '').strip()
+        c = (r.get('city') or '').strip()
+        s = (r.get('state') or '').strip()
+        if n:
+            _name_to_loc[n].append((c, s))
+    # Build composite key urb_lookup: name||city||state → urbanization
+    urb_lookup = {}
+    for r in records:
+        n = (r.get('institution_name') or '').strip()
+        c = (r.get('city') or '').strip()
+        s = (r.get('state') or '').strip()
+        if n:
+            urb_lookup[f"{n}||{c}||{s}"] = r.get('urbanization', '')
+    osm_lookup = build_osm_lookup(OSM_FILE, urb_lookup=urb_lookup, name_to_loc=dict(_name_to_loc))
     osm_json   = json.dumps(osm_lookup, separators=(',', ':'), ensure_ascii=False)
     osm_mb     = len(osm_json) / (1024 * 1024)
     print(f'  {len(osm_lookup):,} institutions with land data  ({osm_mb:.1f} MB)')
