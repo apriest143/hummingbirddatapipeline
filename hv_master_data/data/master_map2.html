@@ -954,6 +954,7 @@
             var pCol=pConf==='HIGH'?'var(--low)':pConf==='MEDIUM'?'var(--elevated)':'var(--text2)';
             var aHtml='<div class="pgrid-val">'+pVal+'</div><div style="font-size:9px;color:'+pCol+';margin-top:2px">'+pSrc+' \u00b7 '+pConf+'</div>';
             if(hasHIFLD&&r.acreage_primary_source!=='HIFLD'){aHtml+='<div style="font-size:9px;color:var(--text2);margin-top:3px">HIFLD: '+parseFloat(r.hifld_acres).toLocaleString(undefined,{maximumFractionDigits:1})+' ac · polygon</div>';}
+            if(r.acreage_weighted){var wVal=parseFloat(r.acreage_weighted).toLocaleString(undefined,{maximumFractionDigits:1});var wBasis=r.acreage_weighted_basis||'';aHtml+='<div style="font-size:9px;color:var(--accent2);margin-top:3px">⊕ Weighted avg: '+wVal+' ac <span style="color:var(--text2)">· '+wBasis+'</span></div>';}
             if(hasScraper&&hasOSM){var secSrc=r.acreage_primary_source==='OSM'?'Scraper':'OSM';var secVal=r.acreage_primary_source==='OSM'?parseFloat(r.scraper_acres).toLocaleString(undefined,{maximumFractionDigits:1}):parseFloat(r.osm_acres).toLocaleString(undefined,{maximumFractionDigits:1});var secConf=r.acreage_primary_source==='OSM'?r.scraper_confidence:r.osm_confidence;aHtml+='<div style="font-size:9px;color:var(--text2);margin-top:3px">Alt ('+secSrc+'): '+secVal+' ac \u00b7 '+secConf+'</div>';}
             if(v(r.acreage_conflict_flag))aHtml+='<div style="font-size:9px;color:var(--high);margin-top:3px">\u26a0 '+r.acreage_conflict_flag+'</div>';
             if(v(r.scraper_source)){var ss=r.scraper_source.length>50?r.scraper_source.substring(0,50)+'\u2026':r.scraper_source;var ssH=r.scraper_source.startsWith('http')?'<a href="'+r.scraper_source+'" target="_blank" style="color:var(--accent2);text-decoration:none">'+ss+'</a>':ss;aHtml+='<div style="font-size:9px;color:var(--text2);margin-top:3px">Source: '+ssH+'</div>';}
@@ -1176,7 +1177,7 @@
             'distress_category','distress_score','risk_tier',
             'revenue_2024','expenses_2024','net_income_2024','assets_2024','liabilities_2024',
             'equity_ratio','operating_margin','enrollment_2024','enrollment_yoy_pct',
-            'acreage_primary','acreage_primary_source','scraper_acres','osm_acres',
+            'acreage_primary','acreage_primary_source','acreage_weighted','acreage_weighted_basis','scraper_acres','osm_acres','hifld_acres',
             'plant_property_equipment','fte_staff','urbanization','latitude','longitude'];
         var rows = [...shortlist].map(function(name) {
             var r = allData.find(function(d){ return d.institution_name === name; }) || {};
