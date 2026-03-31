@@ -422,7 +422,7 @@
                 </select></div>
 
                 <!-- Risk Filter -->
-                <div class="section"><div class="section-label">Risk Filter</div><select id="fRisk"><option value="">All Levels</option><optgroup label="Distress Score"><option value="critical">Critical Only</option><option value="high_plus">High + Critical</option><option value="moderate_plus">Moderate+</option><option value="distressed_40">Score 40+</option></optgroup><optgroup label="ML Risk (IPEDS)"><option value="ml_critical">ML Critical</option><option value="ml_high">ML High+</option><option value="ml_any_warnings">Has ML Warnings</option></optgroup><optgroup label="Status"><option value="active_only">Active Only (hide closed)</option></optgroup></select></div>
+                <div class="section"><div class="section-label">Risk Filter</div><select id="fRisk"><option value="">All Levels</option><optgroup label="Distress Score"><option value="critical">Critical Only</option><option value="high_plus">High + Critical</option><option value="moderate_plus">Moderate+</option><option value="distressed_40">Score 40+</option></optgroup><optgroup label="ML Risk (IPEDS)"><option value="ml_critical">ML Critical</option><option value="ml_high">ML High+</option><option value="ml_any_warnings">Has ML Warnings</option></optgroup><optgroup label="Status"><option value="likely_closed">Likely Closed Only</option><option value="active_only">Active Only (hide closed)</option></optgroup></select></div>
 
                 <!-- Acreage — fixed to use all sources -->
                 <div class="section"><div class="section-label">Acreage</div><select id="fAcreage">
@@ -671,7 +671,7 @@
             var m=L.circleMarker([lat,lng], opts);
             // Gold ring overlay for shortlisted institutions
             var showHighlight = document.getElementById('showShortlistHighlight');
-            if (showHighlight && showHighlight.checked && shortlist && (shortlist.has((r.institution_name||'')+'||'+(r.city||'')+'||'+(r.state||'')) || shortlist.has(r.institution_name))) {
+            if (showHighlight && showHighlight.checked && shortlist && shortlist.has(r.institution_name)) {
                 opts.color = '#ffc107';
                 opts.weight = 3;
                 opts.opacity = 1;
@@ -1021,11 +1021,9 @@
         var _attr = function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); };
 
         // ⭐ Star button
-        var _slKey = (r.institution_name||'')+'||'+(r.city||'')+'||'+(r.state||'');
-        var _isStarred = shortlist.has(_slKey);
+        var _isStarred = shortlist.has(r.institution_name);
         var starBtnHtml = '<button class="popup-star-btn'+(_isStarred?' starred':'')+'"'
             +' data-name="'+_attr(r.institution_name||'')+'"'
-            +' data-slkey="'+_attr(_slKey)+'"'
             +' onclick="toggleStarFromPopup(this)"'
             +' title="'+(_isStarred?'Remove from shortlist':'Add to shortlist')+'">⭐</button>';
 
@@ -1105,33 +1103,29 @@
             list.innerHTML = '<div class="sl-empty"><div class="sl-empty-icon">\u2B50</div>No institutions shortlisted yet.<br>Click \u2B50 on any popup to add one.</div>';
             return;
         }
-        var items = [...shortlist].map(function(slKey) {
-            var parts = slKey.split('||');
-            var iname = parts[0]||'', icity = parts[1]||'', istate = parts[2]||'';
-            var r = allData.find(function(d){
-                return d.institution_name===iname && (d.city||'')===(icity) && (d.state||'')===(istate);
-            }) || allData.find(function(d){ return d.institution_name===iname; }) || {};
-            var meta = [r.city||icity, r.state||istate].filter(Boolean).join(', ');
+        var items = [...shortlist].map(function(name) {
+            var r = allData.find(function(d){ return d.institution_name === name; }) || {};
+            var meta = [r.city, r.state].filter(Boolean).join(', ');
             var cat = r.distress_category || '';
             var score = parseFloat(r.distress_score);
-            var scoreStr = !isNaN(score) ? score.toFixed(0) + ' — ' : '';
-            var safeKey = slKey.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-            return '<div class="sl-item" onclick="flyToShortlistItem(\'' + safeKey + '\')">'
-                +'<div><div class="sl-item-name">'+iname+'</div>'
-                +'<div class="sl-item-meta">'+meta+(cat?' · '+scoreStr+cat:'')+'</div></div>'
-                +'<div class="sl-item-remove" onclick="event.stopPropagation();removeFromShortlist(\'' + safeKey + '\')">&#x2715;</div>'
+            var scoreStr = !isNaN(score) ? score.toFixed(0) + ' \u2014 ' : '';
+            var safeName = name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+            return '<div class="sl-item" onclick="flyToInstitution(\'' + safeName + '\')">'
+                +'<div><div class="sl-item-name">'+name+'</div>'
+                +'<div class="sl-item-meta">'+meta+(cat?' \u00b7 '+scoreStr+cat:'')+'</div></div>'
+                +'<div class="sl-item-remove" onclick="event.stopPropagation();removeFromShortlist(\'' + safeName + '\')">\u2715</div>'
                 +'</div>';
         });
         list.innerHTML = items.join('');
     }
     function toggleStarFromPopup(btn) {
-        var slKey = btn.getAttribute('data-slkey') || btn.getAttribute('data-name');
-        if (shortlist.has(slKey)) {
-            shortlist.delete(slKey);
+        var name = btn.getAttribute('data-name');
+        if (shortlist.has(name)) {
+            shortlist.delete(name);
             btn.classList.remove('starred');
             btn.title = 'Add to shortlist';
         } else {
-            shortlist.add(slKey);
+            shortlist.add(name);
             btn.classList.add('starred');
             btn.title = 'Remove from shortlist';
         }
@@ -1163,18 +1157,6 @@
         if (mode === 'shortlist') renderShortlistPanel();
         applyFilters();
     }
-    function flyToShortlistItem(slKey) {
-        var parts = slKey.split('||');
-        var iname = parts[0]||'', icity = parts[1]||'', istate = parts[2]||'';
-        var r = allData.find(function(d){
-            return d.institution_name===iname && (d.city||'')===(icity) && (d.state||'')===(istate);
-        }) || allData.find(function(d){ return d.institution_name===iname; });
-        if (!r) return;
-        var lat = parseFloat(r.latitude), lng = parseFloat(r.longitude);
-        if (isNaN(lat)||isNaN(lng)) return;
-        map.setView([lat, lng], 14);
-        if (r._marker) r._marker.openPopup();
-    }
     function flyToInstitution(name) {
         var r = allData.find(function(d){ return d.institution_name === name; });
         if (!r) return;
@@ -1197,10 +1179,7 @@
             'acreage_primary','acreage_primary_source','scraper_acres','osm_acres',
             'plant_property_equipment','fte_staff','urbanization','latitude','longitude'];
         var rows = [...shortlist].map(function(name) {
-            var r = allData.find(function(d){
-                var p=name.split('||');
-                return d.institution_name===(p[0]||name)&&(!p[1]||(d.city||'')===p[1])&&(!p[2]||(d.state||'')===p[2]);
-            }) || allData.find(function(d){ return d.institution_name===name; }) || {};
+            var r = allData.find(function(d){ return d.institution_name === name; }) || {};
             return COLS.map(function(c){ return '"'+String(r[c]||'').replace(/"/g,'""')+'"'; }).join(',');
         });
         var csv = COLS.join(',') + '\n' + rows.join('\n');
@@ -1282,7 +1261,7 @@
             if(f.state&&r.state!==f.state)return false;
             if(f.type){if(f.type==='__higher_ed__'){var it=r.institution_type||'';if(it.indexOf('Public |')<0&&it.indexOf('Private Non-Profit |')<0&&it.indexOf('Private For-Profit |')<0)return false;}else{if(r.institution_type!==f.type)return false;}}
             if(f.urban){var urb=(r.urbanization||'').split(':')[0].trim();if(urb!==f.urban)return false;}
-            // likely_closed filter removed
+            if(f.risk==='likely_closed') return closed;
             if(f.risk==='active_only' && closed) return false;
             if(f.risk==='critical'&&r.distress_category!=='Critical')return false;
             if(f.risk==='high_plus'){var c=r.distress_category;if(c!=='Critical'&&c!=='High')return false;}
@@ -1482,7 +1461,7 @@
         }
         badgeEl.innerHTML = buildEnvScoreBadge(envScore);
         // Partnership Readiness badge
-        var rec = (typeof allData !== 'undefined') ? allData.find(function(r){ var p=(name+'||'+city+'||'+state).split('||'); return r.institution_name===(p[0]||name)&&(!p[1]||(r.city||'')===p[1])&&(!p[2]||(r.state||'')===p[2]); }) : null;
+        var rec = (typeof allData !== 'undefined') ? allData.find(function(r){ return r.institution_name === name; }) : null;
         var prScore = computePRScore(rec);
         var prBadgeEl = document.getElementById('land-pr-badge');
         if (!prBadgeEl) {
@@ -1735,7 +1714,7 @@
     }
 
     function openNewsPanelFromBtn(btn) {
-        if(typeof allData!=='undefined'&&allData){var _r=allData.find(function(x){var _k=btn.getAttribute('data-slkey')||btn.getAttribute('data-name');var _p=_k.split('||');return x.institution_name===(_p[0]||_k)&&(!_p[1]||(x.city||'')=== _p[1])&&(!_p[2]||(x.state||'')=== _p[2]);});if(_r)window._currentNewsInstitution=_r;}
+        if(typeof allData!=='undefined'&&allData){var _r=allData.find(function(x){return x.institution_name===btn.getAttribute('data-name');});if(_r)window._currentNewsInstitution=_r;}
         openNewsPanel(
             btn.getAttribute('data-uid'),
             btn.getAttribute('data-name'),
@@ -1786,6 +1765,26 @@
 
     function fetchNews(force) {
         if (!_newsCurrentUid || !_newsCurrentName) return;
+
+        // ── Check pre-scraped persistent cache first ──────────────────────
+        if (!force && typeof NEWS_CACHE !== 'undefined' && NEWS_CACHE) {
+            var _uid   = _newsCurrentUid   || '';
+            var _name  = _newsCurrentName  || '';
+            var _city  = _newsCurrentCity  || '';
+            var _state = _newsCurrentState || '';
+            var _cKey  = _uid + '||' + _name + '||' + _city + '||' + _state;
+            var _entry = NEWS_CACHE[_cKey];
+            if (_entry && _entry.articles && _entry.articles.length > 0) {
+                renderNewsArticles(_entry.articles);
+                document.getElementById('news-fetch-meta').innerHTML =
+                    'Pre-scraped ' + (_entry.scraped_at || '') +
+                    ' · ' + _entry.articles.length + ' results' +
+                    ' · <a onclick="forceRefreshNews()" style="cursor:pointer;color:var(--accent2)">↻ Live refresh</a>';
+                return;
+            }
+        }
+
+        // ── Fall back to session cache ────────────────────────────────────
         if (!force) {
             var cached = getCache(newsCacheKey(_newsCurrentUid));
             if (cached) { renderNewsArticles(cached.data); return; }

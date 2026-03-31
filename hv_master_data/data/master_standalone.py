@@ -44,7 +44,8 @@ if _osm_scorer is None:
 # CONFIGURATION
 # =============================================================================
 
-MASTER_FILE  = 'hv_master_data/data/Hummingbird_Master_Combined_v6.csv'
+MASTER_FILE      = 'hv_master_data/data/Hummingbird_Master_Combined_v6.csv'
+NEWS_CACHE_FILE  = 'news_cache.json'
 OSM_FILE     = 'hv_master_data/acreage_scripts/osm_land_results.csv'   # optional — skipped if missing
 MAP_TEMPLATE = 'hv_master_data/data/master_map2.html'
 OUTPUT_FILE  = 'index.html'  # repo root → GitHub Pages
@@ -423,7 +424,9 @@ def main():
             '    // ── Embedded master data (standalone) ──\n'
             '    var _embeddedData = __MASTER_DATA__;\n\n'
             '    // ── Embedded OSM land data (standalone) ──\n'
-            '    var OSM_LAND_DATA = __OSM_DATA__;\n\n    '
+            '    var OSM_LAND_DATA = __OSM_DATA__;\n\n'
+            '    // ── Embedded news cache (standalone) ──\n'
+            '    var NEWS_CACHE = __NEWS_CACHE__;\n\n    '
         )
         html = html[:match.start()] + data_declaration + new_load + html[match.end():]
         print('  ✓ Replaced loadCSV with embedded data loader')
@@ -434,6 +437,17 @@ def main():
     # Inject the actual data values
     html = html.replace('__MASTER_DATA__', data_json)
     html = html.replace('__OSM_DATA__',    osm_json)
+
+    # ── Embed news cache ──────────────────────────────────────────────────────
+    if os.path.exists(NEWS_CACHE_FILE):
+        with open(NEWS_CACHE_FILE, encoding='utf-8') as f:
+            news_cache_json = f.read()
+        html = html.replace('__NEWS_CACHE__', news_cache_json)
+        cache_mb = len(news_cache_json) / (1024 * 1024)
+        print(f'  News cache embedded: {cache_mb:.1f} MB')
+    else:
+        html = html.replace('__NEWS_CACHE__', '{}')
+        print('  News cache: not found (news_scraper.py not yet run)')
 
     # Remove PapaParse (no longer needed in standalone mode)
     html = re.sub(
