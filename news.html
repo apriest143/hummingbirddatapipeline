@@ -645,7 +645,15 @@ function loadCacheIntoBoards() {
     var entry = PERSISTENT_CACHE[pKey];
     if (!entry || !entry.articles || !entry.articles.length) return;
     var sessionKey = (entry.name || '') + '|' + (entry.state || '');
-    newsCache[sessionKey] = entry.articles;
+    // Assign signal to each article if missing (scraper doesn't classify)
+    var classified = entry.articles.map(function(a) {
+      if (a.signal) return a;
+      return Object.assign({}, a, {
+        signal: classifyArticle(a.title || '', a.snippet || ''),
+        link:   a.url || a.link || ''
+      });
+    });
+    newsCache[sessionKey] = classified;
     count++;
   });
 
