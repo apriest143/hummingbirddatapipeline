@@ -285,27 +285,27 @@ def build_osm_lookup(osm_path, urb_lookup=None, name_to_loc=None):
             _count  = int(str(row.get('osm_env_count', '0') or '0').strip()) if str(row.get('osm_env_count', '0') or '0').strip().lstrip('-').isdigit() else 0
             _radius = row.get('osm_env_radius_miles', '20')
 
-            # Build composite keys for all (city, state) combos this name maps to
-            locations = _name_loc.get(name, [('', '')])
-            for (city, state) in locations:
-                composite_key = f"{name}||{city}||{state}"
-                _urb = (urb_lookup or {}).get(composite_key) or (urb_lookup or {}).get(name)
-                _env_score = _osm_scorer.score_osm_environment(
-                    by_cat, feature_count=_count, radius_miles=_radius,
-                    urbanization=_urb
-                ) if _osm_scorer else {'score': None, 'feature_score': None,
-                                       'category_score': None, 'density_bonus': None,
-                                       'radius_bonus': None, 'context_mult': None,
-                                       'breakdown': [], 'top_features': [],
-                                       'has_osm_data': bool(by_cat)}
-                lookup[composite_key] = {
-                    'categories':  cats_raw,
-                    'count':       _count,
-                    'radius_miles': _radius,
-                    'queried_at':  queried,
-                    'by_category': by_cat,
-                    'env_score':   _env_score,
-                }
+            # Use city/state directly from CSV row (columns present since tmp rename)
+            city  = row.get('city', '').strip()
+            state = row.get('state', '').strip()
+            composite_key = f"{name}||{city}||{state}"
+            _urb = (urb_lookup or {}).get(composite_key) or (urb_lookup or {}).get(name)
+            _env_score = _osm_scorer.score_osm_environment(
+                by_cat, feature_count=_count, radius_miles=_radius,
+                urbanization=_urb
+            ) if _osm_scorer else {'score': None, 'feature_score': None,
+                                   'category_score': None, 'density_bonus': None,
+                                   'radius_bonus': None, 'context_mult': None,
+                                   'breakdown': [], 'top_features': [],
+                                   'has_osm_data': bool(by_cat)}
+            lookup[composite_key] = {
+                'categories':  cats_raw,
+                'count':       _count,
+                'radius_miles': _radius,
+                'queried_at':  queried,
+                'by_category': by_cat,
+                'env_score':   _env_score,
+            }
 
     return lookup
 
