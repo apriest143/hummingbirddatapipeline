@@ -44,10 +44,11 @@ AUDIT_FILE    = 'hv_master_data/data/acreage_audit.csv'
 # CONFIGURATION
 # =============================================================================
 
-HIFLD_MIN_ACRES         = 5.0
-HIFLD_EXTENDED_FP       = 20.0
-HIFLD_MAX_ACRES         = 50_000
-SCRAPER_INFLATION_RATIO = 3.0
+HIFLD_MIN_ACRES          = 5.0
+HIFLD_EXTENDED_FP        = 20.0
+HIFLD_MAX_ACRES          = 50_000
+HIFLD_OVERBOUNDARY_RATIO = 1.8   # HIFLD > scraper x this AND scraper HIGH → HIFLD grabbed extra land
+SCRAPER_INFLATION_RATIO  = 2.5   # lowered from 3.0: catches scraper grabbing adjacent nature preserves   # lowered from 3.0: catches scraper grabbing adjacent nature preserves (e.g. Juniata 2.18x)
 CONSENSUS_RATIO         = 2.0
 WEIGHTED_AGREE_PCT      = 0.15   # sources within 15% are considered agreeing for weighted avg
 CONFLICT_PCT            = 0.30
@@ -347,8 +348,15 @@ def match_hifld(name, state_full, city, zipcode, indexes):
 
 def validate_sources(hifld_ac, scraper_ac, scraper_conf, osm_ac, osm_conf, osm_ftype):
     valid = {}
+    # HIFLD over-boundary: flag when HIFLD is 1.8x+ above HIGH-confidence scraper
+    # Audit showed this pattern means HIFLD grabbed adjacent land beyond campus
+    hifld_ob = (hifld_ac is not None and scraper_ac and
+                str(scraper_conf).upper() == 'HIGH' and
+                hifld_ac > scraper_ac * HIFLD_OVERBOUNDARY_RATIO)
     if hifld_ac is not None and HIFLD_MIN_ACRES <= hifld_ac <= HIFLD_MAX_ACRES:
         valid['hifld'] = hifld_ac
+        if hifld_ob:
+            valid['_hifld_overboundary'] = True  # sentinel — skipped by _authoritative
     if scraper_ac and str(scraper_conf).upper() in ('HIGH', 'MEDIUM'):
         valid['scraper'] = scraper_ac
     if (osm_ac and str(osm_conf).upper() == 'HIGH'
@@ -409,13 +417,13 @@ def resolve_primary(hifld_ac, scraper_ac, scraper_conf, osm_ac, osm_conf, osm_ft
 
     # Scraper inflation check
     if 'scraper' in valid and len(valid) >= 2:
-        others = [v for k, v in valid.items() if k != 'scraper']
+        others = [v for k, v in valid.items() if k != 'scraper' and not k.startswith('_')]
         other_med = sorted(others)[len(others) // 2]
         if valid['scraper'] > other_med * SCRAPER_INFLATION_RATIO:
             scraper_inflation = True
             del valid['scraper']
 
-    vals = list(valid.values())
+    vals = [v for k, v in valid.items() if not k.startswith('_')]
 
     if len(vals) == 0:
         return _fallback(hifld_ac, scraper_ac, scraper_conf,
@@ -428,8 +436,10 @@ def resolve_primary(hifld_ac, scraper_ac, scraper_conf, osm_ac, osm_conf, osm_ft
             source, acres = _authoritative(valid)
             return round(acres, 1), source, 'consensus', '', scraper_inflation
         else:
-            parts = [f'{k}={v:.0f}ac' for k, v in sorted(valid.items())]
-            conflict_str = f"CONFLICT({', '.join(parts)}, ratio={ratio:.1f}x)"
+            parts = [f'{k}={v:.0f}ac' for k, v in sorted(valid.items()) if not k.startswith('_')]
+            hifld_ob = valid.get('_hifld_overboundary', False)
+            ob_note = ', HIFLD_overboundary' if hifld_ob else ''
+            conflict_str = f"CONFLICT({', '.join(parts)}, ratio={ratio:.1f}x{ob_note})"
             source, acres = _authoritative(valid)
             return round(acres, 1), source, 'conflict', conflict_str, scraper_inflation
 
@@ -451,8 +461,7 @@ def _authoritative(valid):
 
 
 def _fallback(hifld_ac, scraper_ac, scraper_conf, osm_ac, osm_conf, osm_ftype, inflated):
-    if hifld_ac and hifld_ac > 0:
-        return round(hifld_ac, 1), 'HIFLD_footprint', 'footprint', '', inflated
+    # Scraper-first fallback, consistent with new audit-driven priority
     if scraper_ac and not inflated:
         tier = 'single_high' if str(scraper_conf).upper() == 'HIGH' else 'single_medium'
         return round(scraper_ac, 1), 'scraper', tier, '', inflated
@@ -460,6 +469,8 @@ def _fallback(hifld_ac, scraper_ac, scraper_conf, osm_ac, osm_conf, osm_ftype, i
         return round(osm_ac, 1), 'OSM', 'single_high', '', inflated
     if osm_ac:
         return round(osm_ac, 1), 'OSM', 'single_medium', '', inflated
+    if hifld_ac and hifld_ac > 0:
+        return round(hifld_ac, 1), 'HIFLD', 'single_high', '', inflated
     return None, '', 'none', '', inflated
 
 
