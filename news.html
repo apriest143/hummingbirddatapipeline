@@ -392,17 +392,8 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
     <option value="closure_risk">Sort: Closure Risk</option>
     <option value="name">Sort: Name A–Z</option>
   </select>
-  <select id="limit-sel">
-    <option value="50">Scan Top 50</option>
-    <option value="100">Scan Top 100</option>
-    <option value="200">Scan Top 200</option>
-    <option value="500">Scan Top 500</option>
-  </select>
-  <button class="run-btn" id="run-btn" onclick="runScan()">
-    <span id="run-label">⚡ Run Scan</span>
-  </button>
-  <div class="progress-wrap"><div class="progress-fill" id="prog"></div></div>
-  <div class="ctrl-stat" id="ctrl-stat">0 scanned</div>
+
+  <div class="ctrl-stat" id="ctrl-stat" style="font-size:9px;color:var(--text2)"></div>
 </div>
 
 <!-- MAIN -->
@@ -618,6 +609,51 @@ function tempColor(score) {
   return 'var(--text2)';
 }
 
+// ── PERSISTENT NEWS CACHE ─────────────────────────────────────
+var PERSISTENT_CACHE = {};  // loaded from news_cache.json
+
+function loadPersistentCache() {
+  fetch('news_cache.json')
+    .then(function(r) { if (!r.ok) throw new Error('not found'); return r.json(); })
+    .then(function(data) {
+      PERSISTENT_CACHE = data;
+      var _count = Object.keys(data).length;
+      document.getElementById('ctrl-stat').textContent = _count.toLocaleString() + ' institutions cached';
+      console.log('News cache loaded:', _count, 'entries');
+
+      // Bulk-populate session newsCache from persistent cache so boards
+      // populate immediately without needing a scan
+      Object.keys(PERSISTENT_CACHE).forEach(function(pKey) {
+        var entry = PERSISTENT_CACHE[pKey];
+        if (!entry || !entry.articles || !entry.articles.length) return;
+        // Session cache key is name|state
+        var sessionKey = (entry.name || '') + '|' + (entry.state || '');
+        if (!newsCache[sessionKey]) {
+          newsCache[sessionKey] = entry.articles;
+        }
+      });
+
+      renderAll(); updateBoards(); updateSpectrum();
+      // Re-render right panel if an institution is already selected
+      if (activeInst) {
+        var _inst = ALL_DATA.find(function(r){ return (r.institution_name+'|'+r.state) === activeInst; });
+        if (_inst) renderRightPanel(_inst);
+      }
+    })
+    .catch(function() {
+      console.log('news_cache.json not found — live fetch only');
+    });
+}
+
+function getPersistentEntry(inst) {
+  // Key format matches news_scraper.py: uid||name||city||state
+  var uid   = inst.unitid || '';
+  var name  = inst.institution_name || '';
+  var city  = inst.city  || '';
+  var state = inst.state || '';
+  return PERSISTENT_CACHE[uid + '||' + name + '||' + city + '||' + state] || null;
+}
+
 // ── RSS FETCH ─────────────────────────────────────────────────
 var PROXY = 'https://api.allorigins.win/raw?url=';
 var GN    = 'https://news.google.com/rss/search?q=';
@@ -661,10 +697,20 @@ function parseRSS(xml) {
   return out;
 }
 
-async function fetchNewsFor(inst) {
+async function fetchNewsFor(inst, force) {
   var key = inst.institution_name + '|' + inst.state;
-  if (newsCache[key]) return newsCache[key];
+  if (!force && newsCache[key]) return newsCache[key];
 
+  // Check persistent pre-scraped cache first
+  if (!force) {
+    var entry = getPersistentEntry(inst);
+    if (entry && entry.articles && entry.articles.length > 0) {
+      newsCache[key] = entry.articles;
+      return entry.articles;
+    }
+  }
+
+  // Fall back to live RSS fetch
   var q   = buildQuery(inst.institution_name, inst.city, inst.state, inst.data_source);
   var rss = GN + encodeURIComponent(q) + '&hl=en-US&gl=US&ceid=US:en';
   var url = PROXY + encodeURIComponent(rss);
@@ -682,6 +728,7 @@ function loadData() {
   newsCache = {};
   activeInst = null;
   resetRightPanel();
+  loadPersistentCache();
   var src = SRC === 'IPEDS' ? 'hv_master_data/hv_ipeds_data.js' : 'hv_master_data/hv_990_data.js';
   fetch(src)
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
@@ -765,8 +812,16 @@ function selectInst(name, state) {
 
 function renderRightPanel(inst) {
   var key  = inst.institution_name + '|' + inst.state;
+  // Pre-populate from persistent cache if not already in session cache
+  if (!newsCache[key]) {
+    var _pe = getPersistentEntry(inst);
+    if (_pe && _pe.articles && _pe.articles.length > 0) {
+      newsCache[key] = _pe.articles;
+    }
+  }
   var arts = newsCache[key];
   var temp = arts ? computeTemperature(arts) : null;
+  var _scraped = (function(){ var _pe=getPersistentEntry(inst); return _pe?_pe.scraped_at:null; })();
   var ds   = inst.distress_score != null ? inst.distress_score.toFixed(1) : '—';
   var cr   = inst.closure_risk_score != null ? (inst.closure_risk_score*100).toFixed(0)+'%' : '—';
 
@@ -787,7 +842,7 @@ function renderRightPanel(inst) {
 
   var artHtml = '';
   if (!arts) {
-    artHtml = '<button class="fetch-btn" id="fetch-btn" onclick="fetchSingle('+JSON.stringify(inst.institution_name)+','+JSON.stringify(inst.state)+')">📡 Fetch News</button>';
+    artHtml = '<div style="font-size:9px;color:var(--text2);margin-bottom:6px">No cached articles</div><button class="fetch-btn" id="fetch-btn" onclick="fetchSingle('+JSON.stringify(inst.institution_name)+','+JSON.stringify(inst.state)+')">📡 Fetch Live News</button>';
   } else if (!arts.length) {
     artHtml = '<div class="detail-empty">No relevant news found.</div>';
   } else {
@@ -801,7 +856,8 @@ function renderRightPanel(inst) {
         + (a.source ? '<span style="color:var(--accent2)">'+esc(a.source)+'</span>' : '')
         + (a.date ? '<span>'+a.date+'</span>' : '')
         + '</div></a>';
-    }).join('') + '</div>';
+    }).join('') + '</div>'
+      + (_scraped ? '<div style="font-size:9px;color:var(--text2);margin-top:6px;text-align:right">Cached ' + _scraped + ' · <a style="cursor:pointer;color:var(--accent2)" onclick="fetchSingle(' + JSON.stringify(inst.institution_name) + ',' + JSON.stringify(inst.state) + ')">↻ refresh</a></div>' : '');
   }
 
   rp.innerHTML = '<div class="detail-head">'
@@ -849,13 +905,24 @@ async function runScan() {
   var prog    = document.getElementById('prog');
   var stat    = document.getElementById('ctrl-stat');
 
+  var scanned = 0;
   for (var i = 0; i < targets.length; i++) {
     var inst = targets[i];
     prog.style.width = ((i+1)/targets.length*100)+'%';
-    stat.textContent = (i+1)+' / '+targets.length+' scanned';
+    stat.textContent = (i+1)+' / '+targets.length+' checked';
+
+    // Skip if already in persistent cache
+    var _pe = getPersistentEntry(inst);
+    if (_pe && _pe.articles && _pe.articles.length > 0) {
+      var key = inst.institution_name + '|' + inst.state;
+      newsCache[key] = _pe.articles;
+      renderAll(); updateBoards(); updateSpectrum();
+      continue;
+    }
 
     try {
       await fetchNewsFor(inst);
+      scanned++;
       renderAll(); updateBoards(); updateSpectrum();
     } catch(e) {}
     await sleep(1100);
