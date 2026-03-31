@@ -393,6 +393,9 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
     <option value="name">Sort: Name A–Z</option>
   </select>
 
+  <button class="run-btn" id="load-cache-btn" onclick="loadCacheIntoBoards()" style="background:var(--accent2)">
+    <span id="load-cache-label">📰 Load Cached News</span>
+  </button>
   <div class="ctrl-stat" id="ctrl-stat" style="font-size:9px;color:var(--text2)"></div>
 </div>
 
@@ -621,18 +624,6 @@ function loadPersistentCache() {
       document.getElementById('ctrl-stat').textContent = _count.toLocaleString() + ' institutions cached';
       console.log('News cache loaded:', _count, 'entries');
 
-      // Bulk-populate session newsCache from persistent cache so boards
-      // populate immediately without needing a scan
-      Object.keys(PERSISTENT_CACHE).forEach(function(pKey) {
-        var entry = PERSISTENT_CACHE[pKey];
-        if (!entry || !entry.articles || !entry.articles.length) return;
-        // Session cache key is name|state
-        var sessionKey = (entry.name || '') + '|' + (entry.state || '');
-        if (!newsCache[sessionKey]) {
-          newsCache[sessionKey] = entry.articles;
-        }
-      });
-
       renderAll(); updateBoards(); updateSpectrum();
       // Re-render right panel if an institution is already selected
       if (activeInst) {
@@ -643,6 +634,25 @@ function loadPersistentCache() {
     .catch(function() {
       console.log('news_cache.json not found — live fetch only');
     });
+}
+
+function loadCacheIntoBoards() {
+  var btn = document.getElementById('load-cache-btn');
+  var lbl = document.getElementById('load-cache-label');
+  var count = 0;
+
+  Object.keys(PERSISTENT_CACHE).forEach(function(pKey) {
+    var entry = PERSISTENT_CACHE[pKey];
+    if (!entry || !entry.articles || !entry.articles.length) return;
+    var sessionKey = (entry.name || '') + '|' + (entry.state || '');
+    newsCache[sessionKey] = entry.articles;
+    count++;
+  });
+
+  document.getElementById('ctrl-stat').textContent = count.toLocaleString() + ' institutions loaded';
+  lbl.textContent = '✓ ' + count + ' loaded';
+  btn.disabled = true;
+  renderAll(); updateBoards(); updateSpectrum();
 }
 
 function getPersistentEntry(inst) {
