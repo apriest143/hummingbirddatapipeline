@@ -834,7 +834,13 @@ function renderRightPanel(inst) {
   if (!newsCache[key]) {
     var _pe = getPersistentEntry(inst);
     if (_pe && _pe.articles && _pe.articles.length > 0) {
-      newsCache[key] = _pe.articles;
+      newsCache[key] = _pe.articles.map(function(a) {
+        if (a.signal) return a;
+        return Object.assign({}, a, {
+          signal: classifyArticle(a.title || '', a.snippet || ''),
+          link:   a.url || a.link || ''
+        });
+      });
     }
   }
   var arts = newsCache[key];
