@@ -1028,7 +1028,7 @@
             +' title="'+(_isStarred?'Remove from shortlist':'Add to shortlist')+'">⭐</button>';
 
         // 🌿 Land button
-        var _landData = (typeof OSM_LAND_DATA !== 'undefined') ? (OSM_LAND_DATA[r.institution_name]||null) : null;
+        var _landData = (typeof OSM_LAND_DATA !== 'undefined') ? ((OSM_LAND_DATA[(r.institution_name||'')+'||'+(r.city||'')+'||'+(r.state||'')]||null)||null) : null;
         var landBtnHtml = '<button class="popup-land-btn'+(_landData?' has-data':' no-data')+'"'
             +' data-name="'+_attr(r.institution_name||'')+'"'
             +' data-city="'+_attr(r.city||'')+'"'
@@ -1281,7 +1281,7 @@
             if(f.acreage==='has_data'){if(!getAcreage(r))return false;}
             else if(f.acreage){if(getAcreage(r)<parseFloat(f.acreage))return false;}
             if(osmActive.length>0){
-                var osmEntry=(typeof OSM_LAND_DATA!=='undefined')?(OSM_LAND_DATA[r.institution_name]||null):null;
+                var osmEntry=(typeof OSM_LAND_DATA!=='undefined')?((OSM_LAND_DATA[(r.institution_name||'')+'||'+(r.city||'')+'||'+(r.state||'')]||null)||null):null;
                 var cats=osmEntry?(osmEntry.categories||[]):[];
                 if(osmMatchAll){if(!osmActive.every(function(c){return cats.indexOf(c)>=0;}))return false;}
                 else{if(!osmActive.some(function(c){return cats.indexOf(c)>=0;}))return false;}
@@ -1325,8 +1325,9 @@
         var name = btn.getAttribute('data-name');
         var city = btn.getAttribute('data-city');
         var state = btn.getAttribute('data-state');
-        if (typeof OSM_LAND_DATA === 'undefined' || !OSM_LAND_DATA[name]) return;
-        openLandPanel(name, city, state, OSM_LAND_DATA[name]);
+        var _osmKey = (name||'')+'||'+(city||'')+'||'+(state||'');
+        if (typeof OSM_LAND_DATA === 'undefined' || !OSM_LAND_DATA[_osmKey]) return;
+        openLandPanel(name, city, state, OSM_LAND_DATA[_osmKey]);
     }
 
     function envScoreColor(score) {
@@ -1676,7 +1677,7 @@
         var el=document.getElementById('env-content');if(!el)return;
         var r=window._currentNewsInstitution;
         if(!r){el.innerHTML='<div style="color:var(--text2)">Open an institution to load environment data.</div>';return;}
-        var osm=typeof OSM_LAND_DATA!=='undefined'?OSM_LAND_DATA[r.institution_name||'']:null;
+        var osm=typeof OSM_LAND_DATA!=='undefined'?(OSM_LAND_DATA[(r.institution_name||'')+'||'+(r.city||'')+'||'+(r.state||'')]||null):null;
         var score=parseFloat((osm&&osm.env_score)||'');
         var html='';
         if(!isNaN(score)){
