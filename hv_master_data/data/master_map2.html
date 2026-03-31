@@ -1462,7 +1462,7 @@
         }
         badgeEl.innerHTML = buildEnvScoreBadge(envScore);
         // Partnership Readiness badge
-        var rec = (typeof allData !== 'undefined') ? allData.find(function(r){ return r.institution_name === name; }) : null;
+        var rec = (typeof allData !== 'undefined') ? allData.find(function(r){ return r.institution_name === name && (r.city||'') === (city||'') && (r.state||'') === (state||''); }) || allData.find(function(r){ return r.institution_name === name; }) : null;
         var prScore = computePRScore(rec);
         var prBadgeEl = document.getElementById('land-pr-badge');
         if (!prBadgeEl) {
