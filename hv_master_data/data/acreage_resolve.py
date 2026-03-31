@@ -48,7 +48,8 @@ HIFLD_MIN_ACRES          = 5.0
 HIFLD_EXTENDED_FP        = 20.0
 HIFLD_MAX_ACRES          = 50_000
 HIFLD_OVERBOUNDARY_RATIO = 1.8   # HIFLD > scraper x this AND scraper HIGH → HIFLD grabbed extra land
-SCRAPER_INFLATION_RATIO  = 2.5   # lowered from 3.0: catches scraper grabbing adjacent nature preserves   # lowered from 3.0: catches scraper grabbing adjacent nature preserves (e.g. Juniata 2.18x)
+SCRAPER_INFLATION_RATIO  = 2.5   # lowered from 3.0: catches scraper grabbing adjacent nature preserves
+SCRAPER_INFLATION_MIN_REF = 20.0  # only fire inflation check if reference >= this — prevents bad OSM polygon collisions   # lowered from 3.0: catches scraper grabbing adjacent nature preserves (e.g. Juniata 2.18x)
 CONSENSUS_RATIO         = 2.0
 WEIGHTED_AGREE_PCT      = 0.15   # sources within 15% are considered agreeing for weighted avg
 CONFLICT_PCT            = 0.30
@@ -416,10 +417,12 @@ def resolve_primary(hifld_ac, scraper_ac, scraper_conf, osm_ac, osm_conf, osm_ft
     valid = validate_sources(hifld_ac, scraper_ac, scraper_conf, osm_ac, osm_conf, osm_ftype)
 
     # Scraper inflation check
-    if 'scraper' in valid and len(valid) >= 2:
+    if 'scraper' in valid and len([k for k in valid if not k.startswith('_')]) >= 2:
         others = [v for k, v in valid.items() if k != 'scraper' and not k.startswith('_')]
         other_med = sorted(others)[len(others) // 2]
-        if valid['scraper'] > other_med * SCRAPER_INFLATION_RATIO:
+        # Only fire if reference >= 20ac — prevents bad OSM polygon collisions
+        # (e.g. Sterling VT OSM=5.4ac from wrong KS polygon) falsely flagging 160ac scraper
+        if other_med >= SCRAPER_INFLATION_MIN_REF and valid['scraper'] > other_med * SCRAPER_INFLATION_RATIO:
             scraper_inflation = True
             del valid['scraper']
 
