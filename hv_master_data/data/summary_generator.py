@@ -4,11 +4,121 @@ summary_generator.py — Hummingbird Market Summary Dashboard
 Generates summary.html. Called by master_standalone.py or run directly:
     python hv_master_data/data/summary_generator.py
 """
-import os, sys, csv, json, math, datetime, argparse
+import os, sys, csv, json, math, datetime, argparse, re, importlib.util as _ilu
 from collections import Counter, defaultdict
 
 DEFAULT_MASTER = 'hv_master_data/data/Hummingbird_Master_Combined_v6.csv'
+DEFAULT_OSM    = 'hv_master_data/acreage_scripts/osm_land_results.csv'
 DEFAULT_OUT    = 'summary.html'
+
+# ── Load osm_scorer.py (shared with master_standalone / clusters) ──────────
+_osm_scorer = None
+for _p in [
+    os.path.join(os.path.dirname(__file__), 'osm_scorer.py'),
+    os.path.join(os.path.dirname(__file__), '..', 'data', 'osm_scorer.py'),
+    'osm_scorer.py',
+    'hv_master_data/data/osm_scorer.py',
+    'hv_master_data/acreage_scripts/osm_scorer.py',
+]:
+    if os.path.exists(_p):
+        _spec = _ilu.spec_from_file_location('osm_scorer', _p)
+        _osm_scorer = _ilu.module_from_spec(_spec)
+        _spec.loader.exec_module(_osm_scorer)
+        print(f'  Loaded osm_scorer from {_p}')
+        break
+if _osm_scorer is None:
+    print("  Warning: osm_scorer.py not found — environment scores will be blank")
+
+# ── OSM feature label→category mapping (mirrors master_standalone.py) ──────
+_FEATURES = [
+    ("Coastline","water"),("Lake/Pond","water"),("River","water"),("Beach","water"),
+    ("Canal","water"),("Stream","water"),("Wetland","water"),("Marina","water"),
+    ("Natural Spring","water"),("Hot Spring","water"),
+    ("Ski Resort","winter"),("Winter Sports Area","winter"),("Downhill Ski Run","winter"),
+    ("Nordic Ski Trail","winter"),("Gondola","winter"),("Chair Lift","winter"),
+    ("Drag Lift","winter"),("Cable Car","winter"),("Ice Skating","winter"),
+    ("Skiing Facility","winter"),("Ice Hockey Rink","winter"),
+    ("Hiking Trail","outdoor_recreation"),("Mountain Bike Trail","outdoor_recreation"),
+    ("Cycling Route","outdoor_recreation"),("Equestrian Trail","outdoor_recreation"),
+    ("Canoe Route","outdoor_recreation"),("Dedicated Cycleway","outdoor_recreation"),
+    ("Bridleway","outdoor_recreation"),("Rock Climbing","outdoor_recreation"),
+    ("Surfing","outdoor_recreation"),("Kayaking","outdoor_recreation"),
+    ("Rowing","outdoor_recreation"),("Fishing","outdoor_recreation"),
+    ("Hunting","outdoor_recreation"),("Golf","outdoor_recreation"),
+    ("Golf Course","outdoor_recreation"),("Sports Centre","outdoor_recreation"),
+    ("Horse Riding","outdoor_recreation"),("Swimming Facility","outdoor_recreation"),
+    ("Campground","outdoor_recreation"),("Wilderness Hut","outdoor_recreation"),
+    ("National Park","protected_land"),("Protected Area","protected_land"),
+    ("Nature Reserve","protected_land"),("Forest","protected_land"),
+    ("National Forest","protected_land"),("Conservation Land","protected_land"),
+    ("Woodland","natural_features"),("Mountain Peak","natural_features"),
+    ("Volcano","natural_features"),("Cliff","natural_features"),
+    ("Cave","natural_features"),("Glacier","natural_features"),
+    ("Scrubland","natural_features"),("Heathland","natural_features"),
+    ("Resort","tourism_leisure"),("Theme Park","tourism_leisure"),
+    ("Zoo","tourism_leisure"),("Aquarium","tourism_leisure"),
+    ("Museum","tourism_leisure"),("Tourist Attraction","tourism_leisure"),
+    ("Scenic Viewpoint","tourism_leisure"),("Historic Monument","tourism_leisure"),
+    ("Park","tourism_leisure"),("Botanical Garden","tourism_leisure"),
+    ("Casino","tourism_leisure"),
+    ("Airport","infrastructure"),("Train Station","infrastructure"),
+    ("Ferry Terminal","infrastructure"),
+]
+_LABEL_TO_CAT = {f[0]: f[1] for f in _FEATURES}
+
+def _parse_osm_feature_string(feat_str):
+    """Lightweight parser — just enough to feed osm_scorer."""
+    by_category = {}
+    if not feat_str or feat_str.strip() in ('', 'ERROR'):
+        return by_category
+    for part in feat_str.split(' | '):
+        part = part.strip()
+        if not part: continue
+        label, display = '', part
+        if part.endswith(']') and '[' in part:
+            bracket = part.rfind('[')
+            label   = part[bracket+1:-1].strip()
+            display = part[:bracket].strip()
+        cat = _LABEL_TO_CAT.get(label, 'other')
+        if cat == 'other': continue
+        by_category.setdefault(cat, []).append({'label': label, 'display': display})
+    return by_category
+
+def build_env_score_lookup(osm_path, urb_lookup=None):
+    """
+    Load osm_land_results.csv and compute environment scores.
+    Returns dict keyed by name||city||state → float score (0-100).
+    """
+    if not osm_path or not os.path.exists(osm_path):
+        print(f'  OSM env file not found: {osm_path} — env scores will be blank')
+        return {}
+    if _osm_scorer is None:
+        return {}
+
+    csv.field_size_limit(10 * 1024 * 1024)
+    lookup = {}
+    with open(osm_path, newline='', encoding='utf-8', errors='replace') as f:
+        for row in csv.DictReader(f):
+            name    = row.get('institution_name', '').strip()
+            queried = row.get('osm_env_queried_at', '').strip()
+            feat_str = row.get('osm_env_features', '').strip()
+            if not name or not queried or feat_str == 'ERROR':
+                continue
+            by_cat = _parse_osm_feature_string(feat_str)
+            _count_str = str(row.get('osm_env_count', '0') or '0').strip()
+            _count = int(_count_str) if _count_str.lstrip('-').isdigit() else 0
+            _radius = row.get('osm_env_radius_miles', '20')
+            city  = row.get('city', '').strip()
+            state = row.get('state', '').strip()
+            key   = f"{name}||{city}||{state}"
+            _urb  = (urb_lookup or {}).get(key)
+            result = _osm_scorer.score_osm_environment(
+                by_cat, feature_count=_count, radius_miles=_radius,
+                urbanization=_urb
+            )
+            lookup[key] = result.get('score')  # float or None
+    print(f'  OSM env scores: {sum(1 for v in lookup.values() if v is not None):,} scored')
+    return lookup
 
 def fv(r,c):
     v=r.get(c,'')
@@ -29,8 +139,23 @@ def fmt_m(v): return f"${round(v/1e6,1)}M" if v else "—"
 def fmt_b(v): return f"${round(v/1e9,1)}B" if v else "—"
 def fmt_n(v, decimals=1): return f"{round(v,decimals):,}" if v is not None else "—"
 
+def _env(r, env_lookup):
+    """Get OSM environment score for a row from the lookup."""
+    key = f"{r.get('institution_name','').strip()}||{r.get('city','').strip()}||{r.get('state','').strip()}"
+    return env_lookup.get(key)
 
-def compute_stats(rows):
+def _env_label(score):
+    """Human label for OSM environment score."""
+    if score is None:  return '—'
+    if score >= 85:    return 'Exceptional'
+    if score >= 70:    return 'Strong'
+    if score >= 55:    return 'Moderate'
+    if score >= 35:    return 'Limited'
+    return 'Minimal'
+
+
+def compute_stats(rows, env_lookup=None):
+    if env_lookup is None: env_lookup = {}
     ipeds = [r for r in rows if r.get('data_source')=='IPEDS']
     hb990 = [r for r in rows if r.get('data_source')=='Hummingbird_990']
 
@@ -40,6 +165,7 @@ def compute_stats(rows):
     for cat in dist_order:
         rs = [r for r in ipeds if r.get('distress_category')==cat]
         if not rs: continue
+        acres_vals = [get_acres(r) for r in rs if get_acres(r)]
         ipeds_dist.append({
             'cat': cat, 'count': len(rs),
             'pct': pct(len(rs), len(ipeds)),
@@ -47,6 +173,10 @@ def compute_stats(rows):
             'avg_revenue_m': round((avg([fv(r,'revenue_2024') for r in rs]) or 0)/1e6, 1),
             'avg_enroll': round(avg([fv(r,'enrollment_2024') for r in rs]) or 0),
             'avg_cr': round(avg([fv(r,'closure_risk_score') for r in rs]) or 0, 3),
+            'avg_acres': round(avg(acres_vals) or 0),
+            'land_potential': sum(1 for r in rs if flag(r,'flag_land_potential')),
+            'avg_op_margin': round(avg([fv(r,'operating_margin') for r in rs]) or 0, 1),
+            'avg_env_score': round(avg([_env(r,env_lookup) for r in rs if _env(r,env_lookup) is not None]) or 0, 1),
         })
 
     # ── IPEDS ML risk tiers ───────────────────────────────────────────────
@@ -62,11 +192,16 @@ def compute_stats(rows):
             'avg_distress': round(avg([fv(r,'distress_score') for r in rs]) or 0, 1),
             'avg_revenue_m': round((avg([fv(r,'revenue_2024') for r in rs]) or 0)/1e6, 1),
             'avg_enroll': round(avg([fv(r,'enrollment_2024') for r in rs]) or 0),
+            'avg_acres': round(avg([get_acres(r) for r in rs if get_acres(r)]) or 0),
+            'avg_enr_trend': round(avg([fv(r,'enrollment_2yr_pct') for r in rs]) or 0, 1),
+            'land_potential': sum(1 for r in rs if flag(r,'flag_land_potential')),
+            'avg_env_score': round(avg([_env(r,env_lookup) for r in rs if _env(r,env_lookup) is not None]) or 0, 1),
         })
     no_ml = sum(1 for r in ipeds if not r.get('risk_tier','').strip())
     if no_ml:
         ipeds_risk.append({'tier':'No ML Score','count':no_ml,'pct':pct(no_ml,len(ipeds)),
-                           'avg_cr':None,'avg_distress':None,'avg_revenue_m':None,'avg_enroll':None})
+                           'avg_cr':None,'avg_distress':None,'avg_revenue_m':None,'avg_enroll':None,
+                           'avg_acres':None,'avg_enr_trend':None,'land_potential':None,'avg_env_score':None})
 
     # ── IPEDS by type ─────────────────────────────────────────────────────
     by_type_ipeds = defaultdict(list)
@@ -86,6 +221,10 @@ def compute_stats(rows):
             'avg_distress': round(avg([fv(r,'distress_score') for r in rs]) or 0, 1),
             'med_enroll': round(med([fv(r,'enrollment_2024') for r in rs]) or 0),
             'crit_high': sum(1 for r in rs if r.get('distress_category') in ('Critical','High')),
+            'avg_op_margin': round(avg([fv(r,'operating_margin') for r in rs]) or 0, 1),
+            'avg_pr_score': round(avg([fv(r,'partnership_readiness_score') for r in rs]) or 0, 1),
+            'high_land': sum(1 for r in rs if flag(r,'flag_high_land_potential')),
+            'avg_env_score': round(avg([_env(r,env_lookup) for r in rs if _env(r,env_lookup) is not None]) or 0, 1),
         })
 
     # ── 990 by type ───────────────────────────────────────────────────────
@@ -122,6 +261,11 @@ def compute_stats(rows):
             'revenue_m': round((fv(r,'revenue_2024') or 0)/1e6, 1),
             'acres': round(get_acres(r) or 0),
             'urbanization': r.get('urbanization',''),
+            'op_margin': round(fv(r,'operating_margin') or 0, 1),
+            'enr_trend': round(fv(r,'enrollment_2yr_pct') or 0, 1),
+            'pr_label': r.get('pr_label',''),
+            'land_flag': flag(r,'flag_land_potential'),
+            'env_score': _env(r, env_lookup),
         })
 
     top50_990 = []
@@ -154,6 +298,9 @@ def compute_stats(rows):
             'revenue_m': round((fv(r,'revenue_2024') or 0)/1e6, 1),
             'urbanization': r.get('urbanization',''),
             'source': r.get('acreage_source','scraper'),
+            'pr_label': r.get('pr_label',''),
+            'land_flag': flag(r,'flag_land_potential'),
+            'env_score': _env(r, env_lookup),
         })
 
     # ── Aggregate numbers ─────────────────────────────────────────────────
@@ -161,6 +308,12 @@ def compute_stats(rows):
     hb990_crit = [r for r in hb990 if r.get('distress_category') in ('Critical','High')]
     ia = sum(get_acres(r) for r in ipeds if get_acres(r))
     ha = sum(get_acres(r) for r in hb990 if get_acres(r))
+    # Land-rich distressed: institutions with >=50 ac AND Critical/High distress
+    land_distressed = sum(1 for r in ipeds_crit if flag(r,'flag_land_potential'))
+    high_land_distressed = sum(1 for r in ipeds_crit if flag(r,'flag_high_land_potential'))
+    # Avg env score across all IPEDS with data
+    all_env = [_env(r,env_lookup) for r in ipeds if _env(r,env_lookup) is not None]
+    avg_env_all = round(avg(all_env) or 0, 1) if all_env else None
 
     return {
         'run_date': datetime.datetime.now().strftime('%B %d, %Y'),
@@ -176,6 +329,8 @@ def compute_stats(rows):
         'n990_crit_count': len(hb990_crit), 'n990_crit_pct': round(pct(len(hb990_crit), len(hb990))),
         'combined_acres': round(ia+ha), 'combined_crit': len(ipeds_crit)+len(hb990_crit),
         'combined_dist_acres': round(sum(get_acres(r) for r in ipeds_crit if get_acres(r)) + ha),
+        'land_distressed': land_distressed, 'high_land_distressed': high_land_distressed,
+        'avg_env_all': avg_env_all, 'n_env_scored': len(all_env),
         'ipeds_dist': ipeds_dist, 'ipeds_risk': ipeds_risk,
         'ipeds_types': ipeds_types, 'n990_types': n990_types,
         'top50_ipeds': top50_ipeds, 'top50_990': top50_990,
@@ -292,7 +447,7 @@ def build_html(s):
       <div><div class="callout-val">{s["combined_crit"]:,}</div><div class="callout-lbl">critical/high distress institutions</div></div>
       <div><div class="callout-val">{s["combined_acres"]:,}</div><div class="callout-lbl">total acres tracked</div></div>
       <div><div class="callout-val">{s["combined_dist_acres"]:,}</div><div class="callout-lbl">acres held by distressed institutions</div></div>
-      <div><div class="callout-val">~{round(s["combined_dist_acres"]/640):,}</div><div class="callout-lbl">square miles addressable</div></div>
+      <div><div class="callout-val">{s["land_distressed"]:,}</div><div class="callout-lbl">distressed with developable land (≥50 ac)</div></div>
     </div>'''
 
     # ── ALL tab ───────────────────────────────────────────────────────────
@@ -320,10 +475,14 @@ def build_html(s):
           <td class="mono">${d["avg_revenue_m"]}M</td>
           <td class="mono">{d["avg_enroll"]:,}</td>
           <td class="mono">{d["avg_cr"]}</td>
+          <td class="mono">{d["avg_acres"]:,}</td>
+          <td class="mono">{d["land_potential"]:,}</td>
+          <td class="mono" style="color:{'#ff6b35' if d['avg_op_margin']<0 else 'var(--text)'}">{d["avg_op_margin"]}%</td>
+          <td class="mono">{d["avg_env_score"]}</td>
         </tr>''' for d in s['ipeds_dist'])
 
     dist_table = f'''<div class="tbl-wrap"><table>
-      <thead><tr>{th("Category")}{th("Count","count")}{th("%","pct")}{th("Avg Distress","avg_distress")}{th("Avg Revenue","avg_revenue_m")}{th("Avg Enrollment","avg_enroll")}{th("Avg Closure Risk","avg_cr")}</tr></thead>
+      <thead><tr>{th("Category")}{th("Count","count")}{th("%","pct")}{th("Avg Distress","avg_distress")}{th("Avg Revenue","avg_revenue_m")}{th("Avg Enrollment","avg_enroll")}{th("Avg Closure Risk","avg_cr")}{th("Avg Acres","avg_acres")}{th("Land ≥50ac","land_potential")}{th("Avg Op. Margin","avg_op_margin")}{th("Avg Env Score","avg_env_score")}</tr></thead>
       <tbody>{dist_rows}</tbody></table></div>'''
 
     # ML risk table
@@ -336,10 +495,14 @@ def build_html(s):
           <td class="mono">{r["avg_distress"] if r["avg_distress"] is not None else "—"}</td>
           <td class="mono">{("$"+str(r["avg_revenue_m"])+"M") if r["avg_revenue_m"] is not None else "—"}</td>
           <td class="mono">{(str(r["avg_enroll"])) if r["avg_enroll"] is not None else "—"}</td>
+          <td class="mono">{(str(r["avg_acres"])) if r["avg_acres"] is not None else "—"}</td>
+          <td class="mono" style="color:{'#ff6b35' if r['avg_enr_trend'] is not None and r['avg_enr_trend']<0 else 'var(--text)'}">{(str(r["avg_enr_trend"])+"%") if r["avg_enr_trend"] is not None else "—"}</td>
+          <td class="mono">{(str(r["land_potential"])) if r["land_potential"] is not None else "—"}</td>
+          <td class="mono">{(str(r["avg_env_score"])) if r["avg_env_score"] is not None else "—"}</td>
         </tr>''' for r in s['ipeds_risk'])
 
     risk_table = f'''<div class="tbl-wrap"><table>
-      <thead><tr>{th("ML Risk Tier")}{th("Count","count")}{th("%","pct")}{th("Avg ML Score","avg_cr")}{th("Avg Distress","avg_distress")}{th("Avg Revenue","avg_revenue_m")}{th("Avg Enrollment","avg_enroll")}</tr></thead>
+      <thead><tr>{th("ML Risk Tier")}{th("Count","count")}{th("%","pct")}{th("Avg ML Score","avg_cr")}{th("Avg Distress","avg_distress")}{th("Avg Revenue","avg_revenue_m")}{th("Avg Enrollment","avg_enroll")}{th("Avg Acres","avg_acres")}{th("Enr. Trend 2yr","avg_enr_trend")}{th("Land ≥50ac","land_potential")}{th("Avg Env Score","avg_env_score")}</tr></thead>
       <tbody>{risk_rows}</tbody></table></div>'''
 
     # By type table
@@ -353,12 +516,16 @@ def build_html(s):
           <td class="mono">${t["total_rev_b"]}B</td>
           <td class="mono">{t["total_acres"]:,}</td>
           <td class="mono">{t["avg_distress"]}</td>
+          <td class="mono" style="color:{'#ff6b35' if t['avg_op_margin']<0 else 'var(--text)'}">{t["avg_op_margin"]}%</td>
           <td class="mono">{t["med_enroll"]:,}</td>
           <td class="mono" style="color:#ff6b35">{t["crit_high"]:,}</td>
+          <td class="mono">{t["high_land"]:,}</td>
+          <td class="mono">{t["avg_pr_score"]}</td>
+          <td class="mono">{t["avg_env_score"]}</td>
         </tr>''' for t in s['ipeds_types'])
 
     type_table_ipeds = f'''<div class="tbl-wrap"><table>
-      <thead><tr>{th("Type")}{th("Count","count")}{th("%","pct")}{th("Total Assets","total_assets_b")}{th("Total Liabilities","total_liab_b")}{th("Total Revenue","total_rev_b")}{th("Total Acres","total_acres")}{th("Avg Distress","avg_distress")}{th("Med. Enrollment","med_enroll")}{th("Crit/High","crit_high")}</tr></thead>
+      <thead><tr>{th("Type")}{th("Count","count")}{th("%","pct")}{th("Total Assets","total_assets_b")}{th("Total Liabilities","total_liab_b")}{th("Total Revenue","total_rev_b")}{th("Total Acres","total_acres")}{th("Avg Distress","avg_distress")}{th("Avg Op. Margin","avg_op_margin")}{th("Med. Enrollment","med_enroll")}{th("Crit/High","crit_high")}{th("High Land","high_land")}{th("Avg PR Score","avg_pr_score")}{th("Avg Env Score","avg_env_score")}</tr></thead>
       <tbody>{type_rows_ipeds}</tbody></table></div>'''
 
     # Top 50 IPEDS
@@ -371,13 +538,18 @@ def build_html(s):
           <td class="mono">{r["cr"]}</td>
           <td class="mono">{pill(r["risk_tier"]) if r["risk_tier"] else "—"}</td>
           <td class="mono">{r["enrollment"]:,}</td>
+          <td class="mono" style="color:{'#ff6b35' if r['enr_trend']<0 else 'var(--text)'}">{r["enr_trend"]}%</td>
           <td class="mono">${r["revenue_m"]}M</td>
+          <td class="mono" style="color:{'#ff6b35' if r['op_margin']<0 else 'var(--text)'}">{r["op_margin"]}%</td>
           <td class="mono">{r["acres"]:,} ac</td>
+          <td>{"<span style='color:#10b981'>✓</span>" if r["land_flag"] else "<span style='color:var(--text2)'>—</span>"}</td>
+          <td class="mono">{(str(r["env_score"]) if r["env_score"] is not None else "—")}</td>
+          <td>{pill(r["pr_label"]) if r["pr_label"] else "—"}</td>
           <td style="font-size:9px;color:var(--text2)">{r["urbanization"]}</td>
         </tr>''' for r in s['top50_ipeds'])
 
     top50_ipeds_table = f'''<div class="tbl-wrap"><div class="tbl-scroll"><table>
-      <thead><tr>{th("Institution")}{th("Type")}{th("Category","category")}{th("Distress","distress")}{th("Closure Risk","cr")}{th("ML Tier","risk_tier")}{th("Enrollment","enrollment")}{th("Revenue","revenue_m")}{th("Acres","acres")}{th("Urbanization","urbanization")}</tr></thead>
+      <thead><tr>{th("Institution")}{th("Type")}{th("Category","category")}{th("Distress","distress")}{th("Closure Risk","cr")}{th("ML Tier","risk_tier")}{th("Enrollment","enrollment")}{th("Enr. Trend","enr_trend")}{th("Revenue","revenue_m")}{th("Op. Margin","op_margin")}{th("Acres","acres")}{th("Land ≥50ac","land_flag")}{th("Env Score","env_score")}{th("PR Label","pr_label")}{th("Urbanization","urbanization")}</tr></thead>
       <tbody>{top50_ipeds_rows}</tbody></table></div></div>'''
 
     # Acreage table with search
@@ -391,6 +563,8 @@ def build_html(s):
           <td class="mono">{r["cr"]}</td>
           <td class="mono">{r["enrollment"]:,}</td>
           <td class="mono">${r["revenue_m"]}M</td>
+          <td class="mono">{(str(r["env_score"]) if r["env_score"] is not None else "—")}</td>
+          <td>{pill(r["pr_label"]) if r["pr_label"] else "—"}</td>
           <td style="font-size:9px;color:var(--text2)">{r["urbanization"]}</td>
         </tr>''' for r in s['acreage_rows'])
 
@@ -398,7 +572,7 @@ def build_html(s):
       <input class="tbl-search" id="acreageSearch" placeholder="Search institutions, state, city…" oninput="filterTable('acreageSearch','acreageBody')">
       <div class="tbl-count" id="acreageCount">{len(s['acreage_rows']):,} institutions with acreage data</div>
       <div class="tbl-wrap"><div class="tbl-scroll"><table>
-        <thead><tr>{th("Institution")}{th("Type")}{th("Acres","acres")}{th("Category","category")}{th("Distress","distress")}{th("Closure Risk","cr")}{th("Enrollment","enrollment")}{th("Revenue","revenue_m")}{th("Urbanization")}</tr></thead>
+        <thead><tr>{th("Institution")}{th("Type")}{th("Acres","acres")}{th("Category","category")}{th("Distress","distress")}{th("Closure Risk","cr")}{th("Enrollment","enrollment")}{th("Revenue","revenue_m")}{th("Env Score","env_score")}{th("PR Label","pr_label")}{th("Urbanization")}</tr></thead>
         <tbody id="acreageBody">{acreage_rows_html}</tbody>
       </table></div></div>'''
 
@@ -524,6 +698,7 @@ function filterTable(inputId, tbodyId) {
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--master', default=DEFAULT_MASTER)
+    parser.add_argument('--osm',    default=DEFAULT_OSM)
     parser.add_argument('--out',    default=DEFAULT_OUT)
     args = parser.parse_args()
     print(f"Loading {args.master}...")
@@ -532,8 +707,19 @@ def main():
     with open(args.master, newline='', encoding='utf-8', errors='replace') as f:
         for row in csv.DictReader(f): rows.append(row)
     print(f"  {len(rows):,} rows")
+
+    # Build urbanization lookup for env scorer context multiplier
+    print("Loading OSM environment scores...")
+    urb_lookup = {}
+    for r in rows:
+        key = f"{r.get('institution_name','').strip()}||{r.get('city','').strip()}||{r.get('state','').strip()}"
+        urb = r.get('urbanization','').strip()
+        if urb:
+            urb_lookup[key] = urb
+    env_lookup = build_env_score_lookup(args.osm, urb_lookup=urb_lookup)
+
     print("Computing stats...")
-    s = compute_stats(rows)
+    s = compute_stats(rows, env_lookup=env_lookup)
     print(f"Generating {args.out}...")
     html = build_html(s)
     with open(args.out, 'w', encoding='utf-8') as f: f.write(html)
