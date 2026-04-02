@@ -399,38 +399,7 @@
             <!-- Search -->
             <div class="section"><div class="section-label">Search</div><div class="search-box"><span class="icon">⌕</span><input type="text" id="searchInput" placeholder="Find an institution..." autocomplete="off"><div id="searchResults"></div></div></div>
 
-            <!-- Shortlist tabs -->
-            <div class="shortlist-tabs">
-                <div class="sl-tab active" id="slTabAll" onclick="setShortlistMode('all')">🗺 All Institutions</div>
-                <div class="sl-tab" id="slTabShortlist" onclick="setShortlistMode('shortlist')">⭐ Shortlist <span class="sl-count" id="slCount">0</span></div>
-            </div>
-
-            <!-- Shortlist panel (hidden by default) -->
-            <div id="slPanel" style="display:none">
-                <!-- Bulk add button -->
-                <button class="btn btn-primary" onclick="addAllShownToShortlist()" style="font-size:11px;width:100%;margin-bottom:8px">＋ Add All Shown to Shortlist</button>
-                <!-- View toggle -->
-                <div class="sl-view-tabs">
-                    <div class="sl-view-tab active" onclick="setSlView(this,'batches')">Batches</div>
-                    <div class="sl-view-tab" onclick="setSlView(this,'report')">Ranked Report</div>
-                </div>
-                <!-- Batch list view -->
-                <div id="slBatchView">
-                    <div class="sl-list" id="slList"></div>
-                </div>
-                <!-- Ranked report view -->
-                <div id="slReportView" style="display:none">
-                    <div class="sl-report" id="slReport"></div>
-                </div>
-                <!-- Actions -->
-                <div class="sl-actions">
-                    <button class="btn btn-primary" onclick="exportShortlistReport()" style="font-size:11px;flex:1">📄 Export Report</button>
-                    <button class="btn btn-ghost" onclick="exportShortlistCSV()" style="font-size:11px">⬇ CSV</button>
-                    <button class="btn btn-ghost" onclick="clearShortlist()" style="font-size:11px">Clear All</button>
-                </div>
-            </div>
-
-            <!-- Filters panel -->
+            <!-- Filters panel (always visible) -->
             <div id="filtersPanel">
                 <!-- Data Source -->
                 <div class="section"><div class="section-label">Data Source</div><div class="tabs"><div class="tab active" data-val="" onclick="setTab(this,'source')">All</div><div class="tab" data-val="IPEDS" onclick="setTab(this,'source')">IPEDS</div><div class="tab" data-val="Hummingbird_990" onclick="setTab(this,'source')">990</div></div></div>
@@ -528,6 +497,37 @@
                 </div>
 
                 <div class="btn-row"><button class="btn btn-primary" onclick="applyFilters()">Apply</button><button class="btn btn-ghost" onclick="resetFilters()">Reset</button></div>
+            </div>
+
+            <!-- Shortlist section (always available, collapsible) -->
+            <div class="section" style="margin-top:4px">
+                <div class="filter-collapse-hdr open" onclick="toggleFilterSection(this)">
+                    <div class="section-label" style="margin:0">⭐ Shortlist <span class="sl-count" id="slCount">0</span></div>
+                    <span class="filter-collapse-arrow">▶</span>
+                </div>
+                <div class="filter-collapse-body" id="slPanel">
+                    <!-- Bulk add -->
+                    <button class="btn btn-primary" onclick="addAllShownToShortlist()" style="font-size:11px;width:100%;margin:8px 0">＋ Add All Shown to Shortlist</button>
+                    <!-- View toggle -->
+                    <div class="sl-view-tabs">
+                        <div class="sl-view-tab active" onclick="setSlView(this,'batches')">Batches</div>
+                        <div class="sl-view-tab" onclick="setSlView(this,'report')">Ranked Report</div>
+                    </div>
+                    <!-- Batch list view -->
+                    <div id="slBatchView">
+                        <div class="sl-list" id="slList"></div>
+                    </div>
+                    <!-- Ranked report view -->
+                    <div id="slReportView" style="display:none">
+                        <div class="sl-report" id="slReport"></div>
+                    </div>
+                    <!-- Actions -->
+                    <div class="sl-actions">
+                        <button class="btn btn-primary" onclick="exportShortlistReport()" style="font-size:11px;flex:1">📄 Export Report</button>
+                        <button class="btn btn-ghost" onclick="exportShortlistCSV()" style="font-size:11px">⬇ CSV</button>
+                        <button class="btn btn-ghost" onclick="clearShortlist()" style="font-size:11px">Clear All</button>
+                    </div>
+                </div>
             </div>
 
             <div class="stats-grid">
@@ -1424,13 +1424,9 @@
         applyFilters();
     }
     function setShortlistMode(mode) {
-        shortlistMode = mode;
-        document.getElementById('slTabAll').classList.toggle('active', mode === 'all');
-        document.getElementById('slTabShortlist').classList.toggle('active', mode === 'shortlist');
-        document.getElementById('slPanel').style.display = mode === 'shortlist' ? '' : 'none';
-        document.getElementById('filtersPanel').style.display = mode === 'all' ? '' : 'none';
-        if (mode === 'shortlist') renderShortlistPanel();
-        applyFilters();
+        // Legacy — shortlist is now always-visible collapsible section
+        // No panel switching needed
+        renderShortlistPanel();
     }
     function flyToInstitution(name) {
         var r = allData.find(function(d){ return d.institution_name === name; });
@@ -1633,9 +1629,7 @@
         var showClosed = document.getElementById('showClosed').checked;
         var osmActive = [...document.querySelectorAll('.osm-pill.active')].map(function(p){return p.dataset.cat;});
         var osmMatchAll = document.querySelector('input[name="osmMatch"]:checked').value === 'all';
-        var baseData = (shortlistMode === 'shortlist')
-            ? allData.filter(function(r){ return shortlist.has(r.institution_name); })
-            : plotData;
+        var baseData = plotData;
         var filtered=baseData.filter(function(r){
             var closed = isLikelyClosed(r);
             if(closed && !showClosed && f.risk !== 'likely_closed') return false;
