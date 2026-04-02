@@ -718,7 +718,7 @@
             var m=L.circleMarker([lat,lng], opts);
             // Gold ring overlay for shortlisted institutions
             var showHighlight = document.getElementById('showShortlistHighlight');
-            if (showHighlight && showHighlight.checked && shortlist && shortlist.has(r.institution_name)) {
+            if (showHighlight && showHighlight.checked && shortlist && shortlist.has(slKey(r))) {
                 opts.color = '#ffc107';
                 opts.weight = 3;
                 opts.opacity = 1;
@@ -1068,9 +1068,11 @@
         var _attr = function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); };
 
         // ⭐ Star button
-        var _isStarred = shortlist.has(r.institution_name);
+        var _isStarred = shortlist.has(slKey(r));
         var starBtnHtml = '<button class="popup-star-btn'+(_isStarred?' starred':'')+'"'
             +' data-name="'+_attr(r.institution_name||'')+'"'
+            +' data-city="'+_attr(r.city||'')+'"'
+            +' data-state="'+_attr(r.state||'')+'"'
             +' onclick="toggleStarFromPopup(this)"'
             +' title="'+(_isStarred?'Remove from shortlist':'Add to shortlist')+'">⭐</button>';
 
@@ -1135,6 +1137,14 @@
     }
 
     // ── Shortlist — Enhanced Pipeline ────────────────────────────────────────
+    // Composite key to avoid name collisions (same pattern as Python pipeline)
+    function slKey(r) { return (r.institution_name||'')+'||'+(r.city||'')+'||'+(r.state||''); }
+    function slKeyParts(key) { var p=key.split('||'); return {name:p[0]||'',city:p[1]||'',state:p[2]||''}; }
+    function slFindRecord(key) {
+        var p = slKeyParts(key);
+        return allData.find(function(d){ return d.institution_name===p.name && (d.city||'')===p.city && (d.state||'')===p.state; })
+            || allData.find(function(d){ return d.institution_name===p.name; }) || {};
+    }
     var shortlist = new Set(JSON.parse(localStorage.getItem('hb_shortlist') || '[]'));
     var shortlistBatches = JSON.parse(localStorage.getItem('hb_sl_batches') || '[]');
     var shortlistMode = 'all';
@@ -1225,11 +1235,11 @@
     }
     function addAllShownToShortlist() {
         var data = lastFilteredData.length ? lastFilteredData : plotData;
-        var names = data.map(function(r){ return r.institution_name; }).filter(Boolean);
+        var keys = data.map(function(r){ return slKey(r); }).filter(Boolean);
         var added = 0;
-        names.forEach(function(n) { if (!shortlist.has(n)) { shortlist.add(n); added++; } });
+        keys.forEach(function(k) { if (!shortlist.has(k)) { shortlist.add(k); added++; } });
         if (added === 0) { alert('All shown institutions are already in the shortlist.'); return; }
-        var batch = { id: Date.now(), label: describeCurrentFilters(), names: names, ts: new Date().toLocaleString() };
+        var batch = { id: Date.now(), label: describeCurrentFilters(), names: keys, ts: new Date().toLocaleString() };
         shortlistBatches.push(batch);
         saveShortlist();
         updateShortlistCount();
@@ -1274,36 +1284,38 @@
         var html = '';
         // Show batches
         shortlistBatches.forEach(function(batch) {
-            var liveCount = batch.names.filter(function(n){ return shortlist.has(n); }).length;
+            var liveCount = batch.names.filter(function(k){ return shortlist.has(k); }).length;
             html += '<div class="sl-batch">'
                 + '<div class="sl-batch-hdr" onclick="toggleBatch(this)">'
                 + '<div class="sl-batch-label">' + batch.label + '</div>'
                 + '<span class="sl-batch-count">' + liveCount + '</span>'
                 + '<div class="sl-batch-remove" onclick="event.stopPropagation();removeBatch(' + batch.id + ')" title="Remove entire batch">\u2715</div>'
                 + '</div><div class="sl-batch-items"><div style="padding:4px 8px">';
-            batch.names.slice(0, 20).forEach(function(n) {
-                if (!shortlist.has(n)) return;
-                var safeName = n.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-                html += '<div class="sl-item" onclick="flyToInstitution(\'' + safeName + '\')" style="border-left-color:rgba(108,92,231,0.5);padding:4px 8px">'
-                    + '<div class="sl-item-name" style="font-size:10px">' + n + '</div>'
-                    + '<div class="sl-item-remove" onclick="event.stopPropagation();removeFromShortlist(\'' + safeName + '\')">\u2715</div></div>';
+            batch.names.slice(0, 20).forEach(function(key) {
+                if (!shortlist.has(key)) return;
+                var p = slKeyParts(key);
+                var safeKey = key.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+                html += '<div class="sl-item" onclick="flyToInstitution(\'' + safeKey + '\')" style="border-left-color:rgba(108,92,231,0.5);padding:4px 8px">'
+                    + '<div class="sl-item-name" style="font-size:10px">' + p.name + '<span style="color:var(--text2);font-weight:400;font-size:9px"> ' + [p.city,p.state].filter(Boolean).join(', ') + '</span></div>'
+                    + '<div class="sl-item-remove" onclick="event.stopPropagation();removeFromShortlist(\'' + safeKey + '\')">\u2715</div></div>';
             });
             if (batch.names.length > 20) html += '<div style="font-size:9px;color:var(--text2);padding:4px 8px">+' + (batch.names.length - 20) + ' more...</div>';
             html += '</div></div></div>';
         });
         // Show individually starred (not in any batch)
-        var batchedNames = new Set();
-        shortlistBatches.forEach(function(b){ b.names.forEach(function(n){ batchedNames.add(n); }); });
-        var individuals = [...shortlist].filter(function(n){ return !batchedNames.has(n); });
+        var batchedKeys = new Set();
+        shortlistBatches.forEach(function(b){ b.names.forEach(function(k){ batchedKeys.add(k); }); });
+        var individuals = [...shortlist].filter(function(k){ return !batchedKeys.has(k); });
         if (individuals.length) {
             html += '<div style="font-size:9px;color:var(--text2);font-weight:600;margin:8px 0 4px;text-transform:uppercase;letter-spacing:0.5px">Individually Starred</div>';
-            individuals.forEach(function(n) {
-                var r = allData.find(function(d){ return d.institution_name === n; }) || {};
-                var meta = [r.city, r.state].filter(Boolean).join(', ');
-                var safeName = n.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-                html += '<div class="sl-item" onclick="flyToInstitution(\'' + safeName + '\')">'
-                    + '<div><div class="sl-item-name">' + n + '</div><div class="sl-item-meta">' + meta + '</div></div>'
-                    + '<div class="sl-item-remove" onclick="event.stopPropagation();removeFromShortlist(\'' + safeName + '\')">\u2715</div></div>';
+            individuals.forEach(function(key) {
+                var r = slFindRecord(key);
+                var p = slKeyParts(key);
+                var meta = [p.city, p.state].filter(Boolean).join(', ');
+                var safeKey = key.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+                html += '<div class="sl-item" onclick="flyToInstitution(\'' + safeKey + '\')">'
+                    + '<div><div class="sl-item-name">' + p.name + '</div><div class="sl-item-meta">' + meta + '</div></div>'
+                    + '<div class="sl-item-remove" onclick="event.stopPropagation();removeFromShortlist(\'' + safeKey + '\')">\u2715</div></div>';
             });
         }
         list.innerHTML = html;
@@ -1314,10 +1326,10 @@
     function renderReport() {
         var el = document.getElementById('slReport');
         if (!shortlist.size) { el.innerHTML = '<div class="sl-empty">No institutions in shortlist.</div>'; return; }
-        var scored = [...shortlist].map(function(name) {
-            var r = allData.find(function(d){ return d.institution_name === name; }) || {};
+        var scored = [...shortlist].map(function(key) {
+            var r = slFindRecord(key);
             var s = computeCompositeScore(r);
-            return { name: name, r: r, s: s };
+            return { key: key, name: slKeyParts(key).name, r: r, s: s };
         });
         // Sort
         scored.sort(function(a, b) {
@@ -1353,7 +1365,7 @@
             var opMarg = parseFloat(r.operating_margin); opMarg = !isNaN(opMarg) ? opMarg.toFixed(1)+'%' : '—';
             var ds = parseFloat(r.distress_score); ds = !isNaN(ds) ? ds.toFixed(0) : '—';
             var barW = Math.max(3, Math.round(s.composite * 0.5));
-            var safeName = (r.institution_name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+            var safeName = (item.key||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
             html += '<tr onclick="flyToInstitution(\'' + safeName + '\')" style="cursor:pointer">'
                 + '<td class="rank-cell">' + (i+1) + '</td>'
                 + '<td class="name-cell">' + (r.institution_name||'—') + '<div class="name-sub">' + [r.city, r.state].filter(Boolean).join(', ') + '</div></td>'
@@ -1389,13 +1401,13 @@
 
     // ── Core shortlist functions ───────────────────────────────────────────
     function toggleStarFromPopup(btn) {
-        var name = btn.getAttribute('data-name');
-        if (shortlist.has(name)) {
-            shortlist.delete(name);
+        var key = (btn.getAttribute('data-name')||'')+'||'+(btn.getAttribute('data-city')||'')+'||'+(btn.getAttribute('data-state')||'');
+        if (shortlist.has(key)) {
+            shortlist.delete(key);
             btn.classList.remove('starred');
             btn.title = 'Add to shortlist';
         } else {
-            shortlist.add(name);
+            shortlist.add(key);
             btn.classList.add('starred');
             btn.title = 'Remove from shortlist';
         }
@@ -1404,10 +1416,10 @@
         renderShortlistPanel();
         applyFilters();
     }
-    function removeFromShortlist(name) {
-        shortlist.delete(name);
+    function removeFromShortlist(key) {
+        shortlist.delete(key);
         // Also remove from batches
-        shortlistBatches.forEach(function(b) { b.names = b.names.filter(function(n){ return n !== name; }); });
+        shortlistBatches.forEach(function(b) { b.names = b.names.filter(function(n){ return n !== key; }); });
         shortlistBatches = shortlistBatches.filter(function(b){ return b.names.length > 0; });
         saveShortlist();
         updateShortlistCount();
@@ -1428,9 +1440,9 @@
         // No panel switching needed
         renderShortlistPanel();
     }
-    function flyToInstitution(name) {
-        var r = allData.find(function(d){ return d.institution_name === name; });
-        if (!r) return;
+    function flyToInstitution(key) {
+        var r = slFindRecord(key);
+        if (!r || !r.institution_name) return;
         var lat = parseFloat(r.latitude), lng = parseFloat(r.longitude);
         if (isNaN(lat)||isNaN(lng)) return;
         map.setView([lat, lng], 14);
@@ -1451,8 +1463,8 @@
             'revenue_2024','expenses_2024','net_income_2024','assets_2024','liabilities_2024',
             'equity_ratio','operating_margin','enrollment_2024','enrollment_yoy_pct',
             'acreage_primary','scraper_acres','osm_acres','urbanization','latitude','longitude'];
-        var scored = [...shortlist].map(function(name) {
-            var r = allData.find(function(d){ return d.institution_name === name; }) || {};
+        var scored = [...shortlist].map(function(key) {
+            var r = slFindRecord(key);
             var s = computeCompositeScore(r);
             return { r: r, s: s };
         }).sort(function(a,b){ return b.s.composite - a.s.composite; });
@@ -1473,10 +1485,10 @@
     // ── HTML Report Export ─────────────────────────────────────────────────
     function exportShortlistReport() {
         if (!shortlist.size) { alert('No institutions shortlisted.'); return; }
-        var scored = [...shortlist].map(function(name) {
-            var r = allData.find(function(d){ return d.institution_name === name; }) || {};
+        var scored = [...shortlist].map(function(key) {
+            var r = slFindRecord(key);
             var s = computeCompositeScore(r);
-            return { name: name, r: r, s: s };
+            return { name: slKeyParts(key).name, r: r, s: s };
         }).sort(function(a,b){ return b.s.composite - a.s.composite; });
 
         var avgComp = Math.round(scored.reduce(function(a,b){ return a+b.s.composite; },0)/scored.length);
