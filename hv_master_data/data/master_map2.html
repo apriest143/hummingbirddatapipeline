@@ -1736,11 +1736,12 @@
         if (score >= 35) return 'Limited';
         return 'Minimal';
     }
-    // ── Partnership Readiness Score ─────────────────────────────────────────
+    // ── Partnership Readiness Score (v2 — 4 axes) ────────────────────────────
     var _BEA = {'Hawaii':6.1,'Alaska':5.3,'Montana':4.9,'Vermont':4.5,'Wyoming':4.3,'Maine':4.1,'Idaho':3.9,'New Mexico':3.7,'Oregon':3.5,'Colorado':3.4,'South Dakota':3.3,'North Dakota':3.2,'Utah':3.1,'West Virginia':3.0,'Arkansas':2.9,'New Hampshire':2.8,'Mississippi':2.8,'Kentucky':2.7,'Tennessee':2.7,'South Carolina':2.6,'Alabama':2.6,'Nevada':2.6,'Wisconsin':2.5,'Minnesota':2.5,'Washington':2.5,'Nebraska':2.5,'Kansas':2.4,'Iowa':2.4,'Missouri':2.4,'Indiana':2.4,'North Carolina':2.3,'Arizona':2.3,'Oklahoma':2.3,'Louisiana':2.3,'Georgia':2.2,'Virginia':2.2,'Michigan':2.2,'Ohio':2.1,'Pennsylvania':2.1,'Texas':2.1,'California':2.0,'Florida':2.0,'Illinois':1.9,'Maryland':1.9,'Massachusetts':1.8,'New Jersey':1.7,'Connecticut':1.6,'New York':1.6,'Delaware':1.6,'Rhode Island':1.5,'District of Columbia':1.0};
     var _CLIFF = {'Hawaii':-33,'California':-29,'New York':-27,'West Virginia':-26,'Wyoming':-23,'New Mexico':-21,'Oregon':-19,'Pennsylvania':-17,'Mississippi':-16,'Rhode Island':-15,'Vermont':-15,'Alaska':-14,'Maine':-10,'New Hampshire':-10,'Colorado':-12,'Michigan':-11,'Ohio':-11,'Illinois':-10,'Connecticut':-9,'Massachusetts':-9,'Maryland':-8,'Missouri':-8,'Wisconsin':-8,'Indiana':-7,'Minnesota':-7,'Kansas':-7,'Nebraska':-6,'Iowa':-6,'Washington':-5,'Virginia':-5,'Nevada':-4,'Delaware':-4,'New Jersey':-1,'Arizona':2,'Florida':3,'Georgia':4,'North Carolina':5,'Tennessee':6,'South Carolina':7,'Texas':8,'Kentucky':-3,'Alabama':-2,'Louisiana':-3,'Arkansas':-2,'Oklahoma':1,'Utah':3,'Idaho':6,'Montana':4,'North Dakota':5,'South Dakota':4,'District of Columbia':-5};
     var _CLOSURES = {'Pennsylvania':12,'New York':10,'California':8,'Massachusetts':7,'Illinois':6,'Ohio':6,'Michigan':5,'Virginia':5,'Iowa':5,'Indiana':4,'Wisconsin':4,'Minnesota':4,'Missouri':4,'Connecticut':4,'New Jersey':3,'Texas':3,'Florida':3,'Georgia':3,'North Carolina':3,'Vermont':3,'Maine':2,'Oregon':2,'Washington':2,'Kansas':2,'Nebraska':2,'Montana':2,'Tennessee':2,'Alabama':2,'Kentucky':2,'Oklahoma':2,'Colorado':1,'Arizona':1,'New Hampshire':1,'Rhode Island':1,'West Virginia':1,'Maryland':1,'South Carolina':1,'Mississippi':1,'Arkansas':1,'Louisiana':1,'Nevada':1,'Idaho':1,'New Mexico':1,'Hawaii':1};
     var _SFUND = {'Washington':3,'Colorado':3,'Oregon':3,'California':3,'Minnesota':3,'Maryland':3,'Massachusetts':3,'Connecticut':3,'New York':3,'Utah':3,'Idaho':3,'Montana':3,'North Dakota':3,'South Dakota':3,'Texas':2,'Florida':2,'Georgia':2,'North Carolina':2,'Virginia':2,'Tennessee':2,'Indiana':2,'Ohio':2,'Wisconsin':2,'Michigan':2,'Iowa':2,'Nebraska':2,'Kansas':2,'Missouri':2,'Oklahoma':2,'Arkansas':2,'South Carolina':2,'New Jersey':2,'Delaware':2,'Nevada':2,'Arizona':2,'Hawaii':2,'Alaska':2,'New Mexico':2,'Wyoming':2,'Illinois':1,'Pennsylvania':1,'New Hampshire':1,'Vermont':1,'Maine':1,'Rhode Island':1,'Kentucky':1,'West Virginia':1,'Mississippi':1,'Louisiana':1,'Alabama':1,'District of Columbia':1};
+    var _RE_TIER = {'Florida':3,'Texas':3,'North Carolina':3,'South Carolina':3,'Tennessee':3,'Georgia':3,'Arizona':3,'Nevada':3,'Montana':3,'Idaho':3,'Utah':3,'Colorado':3,'Delaware':3,'Vermont':3,'Maine':3,'New Hampshire':3,'New Jersey':3,'Connecticut':3,'Virginia':2,'Washington':2,'Oregon':2,'California':2,'Massachusetts':2,'Maryland':2,'New York':2,'Pennsylvania':2,'Ohio':2,'Indiana':2,'Michigan':2,'Wisconsin':2,'Minnesota':2,'Missouri':2,'Kansas':2,'Nebraska':2,'Iowa':2,'Kentucky':2,'Alabama':2,'Arkansas':2,'Oklahoma':2,'New Mexico':2,'Wyoming':2,'South Dakota':2,'North Dakota':2,'Alaska':2,'Hawaii':2,'Rhode Island':2,'Illinois':1,'Louisiana':1,'Mississippi':1,'West Virginia':1,'District of Columbia':1};
 
     function computePRScore(rec) {
         if (!rec) return null;
@@ -1749,35 +1750,50 @@
         var ds    = parseFloat(rec.distress_score) || 0;
         var cr    = (parseFloat(rec.closure_risk_score) || 0) * 100;
         var dcat  = rec.distress_category || '';
-        // Axis 1: State Policy (35)
+        var acres = parseFloat(rec.acreage_primary) || parseFloat(rec.scraper_acres) || parseFloat(rec.osm_acres) || 0;
+        // Axis 1: State Policy (28)
         var bea   = _BEA[state] || 2.4;
         var cliff = _CLIFF[state] !== undefined ? _CLIFF[state] : -13;
         var ncls  = _CLOSURES[state] || 0;
-        var s1a   = bea>=4.0?15:bea>=3.5?13:bea>=3.0?11:bea>=2.5?9:bea>=2.0?7:bea>=1.7?5:3;
-        var s1b   = cliff<=-20?12:cliff<=-15?10:cliff<=-10?8:cliff<=-5?6:cliff<=0?4:cliff<=5?2:0;
-        var s1c   = ncls>=8?8:ncls>=5?6:ncls>=3?4:ncls>=1?2:0;
-        // Axis 2: Funding (30)
-        var s2a   = urb==='Rural'?10:urb==='Town'?7:urb==='Suburb'?3:urb==='City'?0:5;
+        var s1a   = bea>=4.0?12:bea>=3.5?10:bea>=3.0?8:bea>=2.5?6:bea>=2.0?4:bea>=1.7?2:1;
+        var s1b   = cliff<=-20?10:cliff<=-15?8:cliff<=-10?6:cliff<=-5?4:cliff<=0?2:cliff<=5?1:0;
+        var s1c   = ncls>=8?6:ncls>=5?5:ncls>=3?3:ncls>=1?2:0;
+        // Axis 2: Funding (24)
         var ft    = _SFUND[state] || 2;
-        var s2b   = ft===3?10:ft===2?6:2;
-        var s2c   = 5;
-        // Axis 3: Urgency (35)
+        var s2a   = urb==='Rural'?8:urb==='Town'?6:urb==='Suburb'?2:urb==='City'?0:4;
+        var s2b   = ft===3?8:ft===2?5:2;
+        var s2c   = 4; // accreditor placeholder (not available client-side easily)
+        // Axis 3: Governance & Urgency (28)
         var comb  = ds*0.6 + cr*0.4;
-        var s3a   = comb>=60?15:comb>=45?12:comb>=30?9:comb>=20?6:comb>=10?3:1;
-        var urbPts= urb==='Rural'?12:urb==='Town'?9:urb==='Suburb'?5:urb==='City'?2:6;
+        var s3a   = comb>=60?12:comb>=45?9:comb>=30?7:comb>=20?5:comb>=10?3:1;
+        var urbPts= urb==='Rural'?10:urb==='Town'?7:urb==='Suburb'?4:urb==='City'?2:5;
         var dBonus= dcat==='Critical'||dcat==='High'?2:dcat==='Moderate'?1:0;
-        var s3b   = Math.min(12, urbPts + dBonus);
+        var s3b   = Math.min(10, urbPts + dBonus);
         var s3c   = 0;
         if (rec.flag_negative_net_worth==='1'||rec.flag_990_negative_net_assets==='1') s3c+=3;
         if (rec.flag_enrollment_decline==='1') s3c+=2;
         if (rec.flag_operating_losses==='1'||rec.flag_990_operating_loss==='1') s3c+=2;
         if ((parseFloat(rec.closure_risk_score)||0)>0.3) s3c+=1;
-        s3c = Math.min(8, s3c);
-        var total = Math.min(100, Math.max(0, s1a+s1b+s1c+s2a+s2b+s2c+s3a+s3b+s3c));
+        s3c = Math.min(6, s3c);
+        // Axis 4: Asset Value (20)
+        var reTier = _RE_TIER[state] || 2;
+        var s4a    = reTier===3?8:reTier===2?5:2;
+        var s4b; // acreage quantum
+        if (urb==='City'||urb==='Suburb') {
+            s4b = acres>=100?7:acres>=50?6:acres>=20?4:acres>=5?2:acres>0?1:0;
+        } else {
+            s4b = acres>=500?7:acres>=200?6:acres>=100?5:acres>=50?3:acres>=20?1:0;
+        }
+        var landMod = {'City':5,'Suburb':4,'Town':3,'Rural':3}[urb] || 3;
+        if ((urb==='Rural'||urb==='Town') && acres>=200) landMod = Math.min(5, landMod+2);
+        else if ((urb==='Rural'||urb==='Town') && acres>=50) landMod = Math.min(5, landMod+1);
+        else if ((urb==='City'||urb==='Suburb') && acres>=10) landMod = Math.min(5, landMod+1);
+        var s4c = landMod;
+        var total = Math.min(100, Math.max(0, s1a+s1b+s1c+s2a+s2b+s2c+s3a+s3b+s3c+s4a+s4b+s4c));
         return {
             total: Math.round(total),
-            axis1: s1a+s1b+s1c, axis2: s2a+s2b+s2c, axis3: s3a+s3b+s3c,
-            bea: bea, cliff: cliff, ncls: ncls,
+            axis1: s1a+s1b+s1c, axis2: s2a+s2b+s2c, axis3: s3a+s3b+s3c, axis4: s4a+s4b+s4c,
+            bea: bea, cliff: cliff, ncls: ncls, reTier: reTier, acres: acres,
             label: total>=75?'Excellent':total>=60?'Strong':total>=45?'Moderate':total>=30?'Limited':'Low'
         };
     }
@@ -1786,15 +1802,17 @@
         if (!pr) return '';
         var color = pr.total>=75?'#00b894':pr.total>=60?'#10b981':pr.total>=45?'#ffa502':pr.total>=30?'#ff6b35':'#ff4757';
         var bgColor = color + '15';
+        var reLbl = pr.reTier===3?'Strong':pr.reTier===2?'Moderate':'Flat';
         return '<div style="margin-top:10px;padding:10px 12px;background:' + bgColor + ';border-radius:8px;border:1px solid ' + color + '44">'
             + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
             + '<div style="width:36px;height:36px;border-radius:50%;border:2.5px solid ' + color + ';display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:' + color + '">' + pr.total + '</div>'
             + '<div><div style="font-size:12px;font-weight:600;color:' + color + '">' + pr.label + ' Partnership Fit</div>'
-            + '<div style="font-size:10px;color:var(--text2)">BEA outdoor ' + pr.bea + '% GDP · WICHE cliff ' + pr.cliff + '% · ' + pr.ncls + ' prior closures</div></div></div>'
-            + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">'
-            + '<div style="background:rgba(255,255,255,.04);border-radius:4px;padding:5px;text-align:center"><div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">' + pr.axis1 + '/35</div><div style="font-size:9px;color:var(--text2);margin-top:1px">State Policy</div></div>'
-            + '<div style="background:rgba(255,255,255,.04);border-radius:4px;padding:5px;text-align:center"><div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">' + pr.axis2 + '/30</div><div style="font-size:9px;color:var(--text2);margin-top:1px">Funding Env.</div></div>'
-            + '<div style="background:rgba(255,255,255,.04);border-radius:4px;padding:5px;text-align:center"><div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">' + pr.axis3 + '/35</div><div style="font-size:9px;color:var(--text2);margin-top:1px">Gov. Urgency</div></div>'
+            + '<div style="font-size:10px;color:var(--text2)">BEA outdoor ' + pr.bea + '% · WICHE ' + pr.cliff + '% · ' + pr.ncls + ' closures · RE ' + reLbl + '</div></div></div>'
+            + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px">'
+            + '<div style="background:rgba(255,255,255,.04);border-radius:4px;padding:5px;text-align:center"><div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">' + pr.axis1 + '/28</div><div style="font-size:9px;color:var(--text2);margin-top:1px">State Policy</div></div>'
+            + '<div style="background:rgba(255,255,255,.04);border-radius:4px;padding:5px;text-align:center"><div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">' + pr.axis2 + '/24</div><div style="font-size:9px;color:var(--text2);margin-top:1px">Funding</div></div>'
+            + '<div style="background:rgba(255,255,255,.04);border-radius:4px;padding:5px;text-align:center"><div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">' + pr.axis3 + '/28</div><div style="font-size:9px;color:var(--text2);margin-top:1px">Urgency</div></div>'
+            + '<div style="background:rgba(255,255,255,.04);border-radius:4px;padding:5px;text-align:center"><div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">' + pr.axis4 + '/20</div><div style="font-size:9px;color:var(--text2);margin-top:1px">Asset Value</div></div>'
             + '</div></div>';
     }
 

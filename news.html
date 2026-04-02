@@ -394,7 +394,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
   </select>
 
   <button class="run-btn" id="load-cache-btn" onclick="loadCacheIntoBoards()" style="background:var(--accent2)">
-    <span id="load-cache-label">📰 Load Cached News</span>
+    <span id="load-cache-label">🔄 Reload Cache</span>
   </button>
   <div class="ctrl-stat" id="ctrl-stat" style="font-size:9px;color:var(--text2)"></div>
 </div>
@@ -623,6 +623,21 @@ function loadPersistentCache() {
       var _count = Object.keys(data).length;
       document.getElementById('ctrl-stat').textContent = _count.toLocaleString() + ' institutions cached';
       console.log('News cache loaded:', _count, 'entries');
+
+      // Auto-populate newsCache from persistent cache (no manual "Load Cache" needed)
+      Object.keys(PERSISTENT_CACHE).forEach(function(pKey) {
+        var entry = PERSISTENT_CACHE[pKey];
+        if (!entry || !entry.articles || !entry.articles.length) return;
+        var sessionKey = (entry.name || '') + '|' + (entry.state || '');
+        if (newsCache[sessionKey]) return; // don't overwrite live-fetched data
+        newsCache[sessionKey] = entry.articles.map(function(a) {
+          if (a.signal) return a;
+          return Object.assign({}, a, {
+            signal: classifyArticle(a.title || '', a.snippet || ''),
+            link:   a.url || a.link || ''
+          });
+        });
+      });
 
       renderAll(); updateBoards(); updateSpectrum();
       // Re-render right panel if an institution is already selected
