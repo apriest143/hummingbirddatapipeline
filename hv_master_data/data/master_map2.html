@@ -96,6 +96,36 @@
         .sl-empty { text-align: center; padding: 24px 12px; color: var(--text2); font-size: 11px; line-height: 1.6; }
         .sl-empty-icon { font-size: 24px; margin-bottom: 8px; }
         .sl-actions { display: flex; gap: 6px; margin-top: 10px; }
+        /* ── Batch groups ── */
+        .sl-batch { margin-bottom: 10px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+        .sl-batch-hdr { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: var(--surface2); cursor: pointer; font-size: 10px; font-weight: 600; color: var(--text2); }
+        .sl-batch-hdr:hover { color: var(--text); }
+        .sl-batch-label { flex: 1; }
+        .sl-batch-count { font-family: var(--mono); font-size: 9px; background: rgba(255,193,7,0.15); color: #ffc107; padding: 1px 6px; border-radius: 8px; }
+        .sl-batch-remove { color: var(--text2); font-size: 11px; padding: 2px 6px; border-radius: 4px; cursor: pointer; }
+        .sl-batch-remove:hover { color: #ff4757; background: rgba(255,71,87,0.1); }
+        .sl-batch-items { max-height: 0; overflow: hidden; transition: max-height 0.25s ease; }
+        .sl-batch.open .sl-batch-items { max-height: 2000px; }
+        /* ── Ranked report table in panel ── */
+        .sl-report { margin-top: 10px; }
+        .sl-report-hdr { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .sl-report-title { font-size: 11px; font-weight: 600; color: var(--text); flex: 1; }
+        .sl-sort-select { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 9px; padding: 3px 6px; font-family: var(--mono); }
+        .sl-report-tbl { width: 100%; border-collapse: collapse; font-size: 9px; }
+        .sl-report-tbl th { padding: 5px 4px; text-align: left; font-family: var(--mono); font-size: 8px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); background: var(--surface2); position: sticky; top: 0; white-space: nowrap; cursor: pointer; }
+        .sl-report-tbl th:hover { color: var(--text); }
+        .sl-report-tbl td { padding: 5px 4px; border-bottom: 1px solid rgba(42,45,55,0.4); font-family: var(--mono); white-space: nowrap; }
+        .sl-report-tbl tr:hover td { background: rgba(255,255,255,0.02); }
+        .sl-report-tbl .rank-cell { font-weight: 700; color: var(--accent2); width: 22px; text-align: center; }
+        .sl-report-tbl .name-cell { font-family: var(--font); font-weight: 600; white-space: normal; max-width: 120px; font-size: 10px; }
+        .sl-report-tbl .name-sub { font-size: 8px; color: var(--text2); font-weight: 400; }
+        .sl-report-scroll { max-height: 380px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+        .sl-report-scroll::-webkit-scrollbar { width: 3px; }
+        .sl-report-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        .sl-composite-bar { display: inline-block; height: 6px; border-radius: 3px; min-width: 3px; }
+        .sl-view-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+        .sl-view-tab { padding: 4px 8px; font-size: 9px; font-weight: 600; border-radius: 4px; cursor: pointer; background: var(--bg); border: 1px solid var(--border); color: var(--text2); }
+        .sl-view-tab.active { background: rgba(108,92,231,0.15); color: var(--accent2); border-color: rgba(108,92,231,0.4); }
         .popup-btn-group { position: absolute; top: 12px; right: 12px; display: flex; gap: 4px; z-index: 10; }
         .popup-star-btn, .popup-land-btn, .popup-news-btn { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: var(--text2); cursor: pointer; font-size: 13px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; padding: 0; }
         .popup-star-btn:hover { background: rgba(255,193,7,0.15); color: #ffc107; border-color: rgba(255,193,7,0.4); }
@@ -377,9 +407,25 @@
 
             <!-- Shortlist panel (hidden by default) -->
             <div id="slPanel" style="display:none">
-                <div class="sl-list" id="slList"></div>
+                <!-- Bulk add button -->
+                <button class="btn btn-primary" onclick="addAllShownToShortlist()" style="font-size:11px;width:100%;margin-bottom:8px">＋ Add All Shown to Shortlist</button>
+                <!-- View toggle -->
+                <div class="sl-view-tabs">
+                    <div class="sl-view-tab active" onclick="setSlView(this,'batches')">Batches</div>
+                    <div class="sl-view-tab" onclick="setSlView(this,'report')">Ranked Report</div>
+                </div>
+                <!-- Batch list view -->
+                <div id="slBatchView">
+                    <div class="sl-list" id="slList"></div>
+                </div>
+                <!-- Ranked report view -->
+                <div id="slReportView" style="display:none">
+                    <div class="sl-report" id="slReport"></div>
+                </div>
+                <!-- Actions -->
                 <div class="sl-actions">
-                    <button class="btn btn-primary" onclick="exportShortlist()" style="font-size:11px">⬇ Export CSV</button>
+                    <button class="btn btn-primary" onclick="exportShortlistReport()" style="font-size:11px;flex:1">📄 Export Report</button>
+                    <button class="btn btn-ghost" onclick="exportShortlistCSV()" style="font-size:11px">⬇ CSV</button>
                     <button class="btn btn-ghost" onclick="clearShortlist()" style="font-size:11px">Clear All</button>
                 </div>
             </div>
@@ -500,6 +546,7 @@
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
     <script>
     var map, markers, allData = [], plotData = [], colorMode = 'distress';
+    var lastFilteredData = []; // stores the last set of institutions shown on the map
     var filters = { source:'', region:'' };
     var searchTimeout;
     var distressColors = {Critical:'#ff4757',High:'#ff6b35',Moderate:'#ffa502',Low:'#3b82f6',Healthy:'#10b981'};
@@ -1087,37 +1134,260 @@
         document.getElementById('searchInput').value=r.institution_name||'';
     }
 
-    // ── Shortlist ──────────────────────────────────────────────────────────────
+    // ── Shortlist — Enhanced Pipeline ────────────────────────────────────────
     var shortlist = new Set(JSON.parse(localStorage.getItem('hb_shortlist') || '[]'));
+    var shortlistBatches = JSON.parse(localStorage.getItem('hb_sl_batches') || '[]');
     var shortlistMode = 'all';
+    var slViewMode = 'batches';
 
     function saveShortlist() {
         localStorage.setItem('hb_shortlist', JSON.stringify([...shortlist]));
+        localStorage.setItem('hb_sl_batches', JSON.stringify(shortlistBatches));
     }
     function updateShortlistCount() {
         document.getElementById('slCount').textContent = shortlist.size;
     }
+
+    // ── Composite Opportunity Score ────────────────────────────────────────
+    function getAcreageSafe(r) {
+        return parseFloat(r.acreage_primary) || parseFloat(r.scraper_acres) || parseFloat(r.osm_acres) || 0;
+    }
+    function getEnvScore(r) {
+        var key = (r.institution_name||'')+'||'+(r.city||'')+'||'+(r.state||'');
+        var osm = (typeof OSM_LAND_DATA !== 'undefined') ? OSM_LAND_DATA[key] : null;
+        return (osm && osm.env_score && osm.env_score.score != null) ? osm.env_score.score : null;
+    }
+    function computeCompositeScore(r) {
+        // LAND SCORE (40% weight) — acreage magnitude + env quality + land flags
+        var acres = getAcreageSafe(r);
+        var acresPts = acres >= 500 ? 30 : acres >= 200 ? 25 : acres >= 100 ? 20 : acres >= 50 ? 15 : acres >= 20 ? 10 : acres > 0 ? 5 : 0;
+        var envRaw = getEnvScore(r);
+        var envPts = envRaw != null ? Math.round(envRaw / 100 * 25) : 8; // fallback mid-score
+        var highLand = (r.flag_high_land_potential === '1') ? 15 : (r.flag_land_potential === '1') ? 8 : 0;
+        var landUrb = ((r.urbanization||'').split(':')[0].trim());
+        var landUrbPts = landUrb==='Rural' ? 15 : landUrb==='Town' ? 12 : landUrb==='Suburb' ? 7 : landUrb==='City' ? 3 : 8;
+        var landRaw = Math.min(100, acresPts + envPts + highLand + landUrbPts);
+
+        // URGENCY SCORE (35% weight) — distress + closure risk + flags
+        var ds = parseFloat(r.distress_score) || 0;
+        var cr = (parseFloat(r.closure_risk_score) || 0) * 100;
+        var urgBase = Math.min(50, ds * 0.5 + cr * 0.3);
+        var flagPts = 0;
+        if (r.flag_negative_net_worth==='1' || r.flag_990_negative_net_assets==='1') flagPts += 10;
+        if (r.flag_enrollment_decline==='1') flagPts += 8;
+        if (r.flag_operating_losses==='1' || r.flag_990_operating_loss==='1') flagPts += 8;
+        if (parseFloat(r.enrollment_yoy_pct) < -5) flagPts += 6;
+        var om = parseFloat(r.operating_margin);
+        if (!isNaN(om) && om < -10) flagPts += 8;
+        var urgRaw = Math.min(100, urgBase + flagPts);
+
+        // PARTNERSHIP READINESS (25% weight) — uses existing PR function
+        var pr = computePRScore(r);
+        var prRaw = pr ? pr.total : 40; // fallback mid-score
+
+        // COMPOSITE — land-weighted
+        var composite = Math.round(landRaw * 0.40 + urgRaw * 0.35 + prRaw * 0.25);
+        return {
+            composite: Math.min(100, composite),
+            land: Math.round(landRaw), urgency: Math.round(urgRaw), pr: Math.round(prRaw),
+            acres: acres, envScore: envRaw,
+            prObj: pr
+        };
+    }
+    function compositeColor(v) {
+        if (v >= 75) return '#00b894';
+        if (v >= 60) return '#10b981';
+        if (v >= 45) return '#ffa502';
+        if (v >= 30) return '#ff6b35';
+        return '#ff4757';
+    }
+    function compositeLabel(v) {
+        if (v >= 75) return 'Excellent';
+        if (v >= 60) return 'Strong';
+        if (v >= 45) return 'Moderate';
+        if (v >= 30) return 'Limited';
+        return 'Low';
+    }
+
+    // ── Batch management ──────────────────────────────────────────────────
+    function describeCurrentFilters() {
+        var parts = [];
+        var src = filters.source; if (src) parts.push(src);
+        var reg = filters.region; if (reg) parts.push(reg);
+        var st = document.getElementById('fState').value; if (st) parts.push(st);
+        var tp = document.getElementById('fType').value;
+        if (tp === '__higher_ed__') parts.push('Higher Ed');
+        else if (tp) parts.push(tp.replace(/Private Non-Profit \| /,'NP ').replace(/Private For-Profit \| /,'FP ').replace(/Public \| /,'Pub '));
+        var urb = document.getElementById('fUrban').value; if (urb) parts.push(urb);
+        var risk = document.getElementById('fRisk').value; if (risk) parts.push(risk.replace(/_/g,' '));
+        var acr = document.getElementById('fAcreage').value; if (acr) parts.push(acr === 'has_data' ? 'Has acreage' : acr+'+ ac');
+        return parts.length ? parts.join(' · ') : 'All institutions';
+    }
+    function addAllShownToShortlist() {
+        var data = lastFilteredData.length ? lastFilteredData : plotData;
+        var names = data.map(function(r){ return r.institution_name; }).filter(Boolean);
+        var added = 0;
+        names.forEach(function(n) { if (!shortlist.has(n)) { shortlist.add(n); added++; } });
+        if (added === 0) { alert('All shown institutions are already in the shortlist.'); return; }
+        var batch = { id: Date.now(), label: describeCurrentFilters(), names: names, ts: new Date().toLocaleString() };
+        shortlistBatches.push(batch);
+        saveShortlist();
+        updateShortlistCount();
+        renderShortlistPanel();
+    }
+    function removeBatch(batchId) {
+        var batch = shortlistBatches.find(function(b){ return b.id === batchId; });
+        if (!batch) return;
+        // Remove names that ONLY exist in this batch (not in other batches or individually starred)
+        var otherNames = new Set();
+        shortlistBatches.forEach(function(b) { if (b.id !== batchId) b.names.forEach(function(n){ otherNames.add(n); }); });
+        batch.names.forEach(function(n) { if (!otherNames.has(n)) shortlist.delete(n); });
+        shortlistBatches = shortlistBatches.filter(function(b){ return b.id !== batchId; });
+        saveShortlist();
+        updateShortlistCount();
+        renderShortlistPanel();
+        applyFilters();
+    }
+    function toggleBatch(el) {
+        el.closest('.sl-batch').classList.toggle('open');
+    }
+
+    // ── Panel rendering ───────────────────────────────────────────────────
+    function setSlView(tab, mode) {
+        slViewMode = mode;
+        document.querySelectorAll('.sl-view-tab').forEach(function(t){ t.classList.remove('active'); });
+        tab.classList.add('active');
+        document.getElementById('slBatchView').style.display = mode === 'batches' ? '' : 'none';
+        document.getElementById('slReportView').style.display = mode === 'report' ? '' : 'none';
+        if (mode === 'report') renderReport();
+    }
     function renderShortlistPanel() {
+        renderBatchView();
+        if (slViewMode === 'report') renderReport();
+    }
+    function renderBatchView() {
         var list = document.getElementById('slList');
         if (!shortlist.size) {
-            list.innerHTML = '<div class="sl-empty"><div class="sl-empty-icon">\u2B50</div>No institutions shortlisted yet.<br>Click \u2B50 on any popup to add one.</div>';
+            list.innerHTML = '<div class="sl-empty"><div class="sl-empty-icon">\u2B50</div>Filter the map, then click<br><b>"Add All Shown"</b> to build your pipeline.</div>';
             return;
         }
-        var items = [...shortlist].map(function(name) {
-            var r = allData.find(function(d){ return d.institution_name === name; }) || {};
-            var meta = [r.city, r.state].filter(Boolean).join(', ');
-            var cat = r.distress_category || '';
-            var score = parseFloat(r.distress_score);
-            var scoreStr = !isNaN(score) ? score.toFixed(0) + ' \u2014 ' : '';
-            var safeName = name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-            return '<div class="sl-item" onclick="flyToInstitution(\'' + safeName + '\')">'
-                +'<div><div class="sl-item-name">'+name+'</div>'
-                +'<div class="sl-item-meta">'+meta+(cat?' \u00b7 '+scoreStr+cat:'')+'</div></div>'
-                +'<div class="sl-item-remove" onclick="event.stopPropagation();removeFromShortlist(\'' + safeName + '\')">\u2715</div>'
-                +'</div>';
+        var html = '';
+        // Show batches
+        shortlistBatches.forEach(function(batch) {
+            var liveCount = batch.names.filter(function(n){ return shortlist.has(n); }).length;
+            html += '<div class="sl-batch">'
+                + '<div class="sl-batch-hdr" onclick="toggleBatch(this)">'
+                + '<div class="sl-batch-label">' + batch.label + '</div>'
+                + '<span class="sl-batch-count">' + liveCount + '</span>'
+                + '<div class="sl-batch-remove" onclick="event.stopPropagation();removeBatch(' + batch.id + ')" title="Remove entire batch">\u2715</div>'
+                + '</div><div class="sl-batch-items"><div style="padding:4px 8px">';
+            batch.names.slice(0, 20).forEach(function(n) {
+                if (!shortlist.has(n)) return;
+                var safeName = n.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+                html += '<div class="sl-item" onclick="flyToInstitution(\'' + safeName + '\')" style="border-left-color:rgba(108,92,231,0.5);padding:4px 8px">'
+                    + '<div class="sl-item-name" style="font-size:10px">' + n + '</div>'
+                    + '<div class="sl-item-remove" onclick="event.stopPropagation();removeFromShortlist(\'' + safeName + '\')">\u2715</div></div>';
+            });
+            if (batch.names.length > 20) html += '<div style="font-size:9px;color:var(--text2);padding:4px 8px">+' + (batch.names.length - 20) + ' more...</div>';
+            html += '</div></div></div>';
         });
-        list.innerHTML = items.join('');
+        // Show individually starred (not in any batch)
+        var batchedNames = new Set();
+        shortlistBatches.forEach(function(b){ b.names.forEach(function(n){ batchedNames.add(n); }); });
+        var individuals = [...shortlist].filter(function(n){ return !batchedNames.has(n); });
+        if (individuals.length) {
+            html += '<div style="font-size:9px;color:var(--text2);font-weight:600;margin:8px 0 4px;text-transform:uppercase;letter-spacing:0.5px">Individually Starred</div>';
+            individuals.forEach(function(n) {
+                var r = allData.find(function(d){ return d.institution_name === n; }) || {};
+                var meta = [r.city, r.state].filter(Boolean).join(', ');
+                var safeName = n.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+                html += '<div class="sl-item" onclick="flyToInstitution(\'' + safeName + '\')">'
+                    + '<div><div class="sl-item-name">' + n + '</div><div class="sl-item-meta">' + meta + '</div></div>'
+                    + '<div class="sl-item-remove" onclick="event.stopPropagation();removeFromShortlist(\'' + safeName + '\')">\u2715</div></div>';
+            });
+        }
+        list.innerHTML = html;
     }
+
+    // ── Ranked Report ─────────────────────────────────────────────────────
+    var _slSortCol = 'composite', _slSortDir = -1;
+    function renderReport() {
+        var el = document.getElementById('slReport');
+        if (!shortlist.size) { el.innerHTML = '<div class="sl-empty">No institutions in shortlist.</div>'; return; }
+        var scored = [...shortlist].map(function(name) {
+            var r = allData.find(function(d){ return d.institution_name === name; }) || {};
+            var s = computeCompositeScore(r);
+            return { name: name, r: r, s: s };
+        });
+        // Sort
+        scored.sort(function(a, b) {
+            var va, vb;
+            switch(_slSortCol) {
+                case 'composite': va = a.s.composite; vb = b.s.composite; break;
+                case 'land': va = a.s.land; vb = b.s.land; break;
+                case 'urgency': va = a.s.urgency; vb = b.s.urgency; break;
+                case 'pr': va = a.s.pr; vb = b.s.pr; break;
+                case 'acres': va = a.s.acres; vb = b.s.acres; break;
+                case 'distress': va = parseFloat(a.r.distress_score)||0; vb = parseFloat(b.r.distress_score)||0; break;
+                default: va = a.s.composite; vb = b.s.composite;
+            }
+            return (va - vb) * _slSortDir;
+        });
+        var thClick = function(col) { return ' onclick="sortSlReport(\'' + col + '\')" style="cursor:pointer"'; };
+        var arrow = function(col) { return _slSortCol === col ? (_slSortDir === -1 ? ' ▼' : ' ▲') : ''; };
+        var html = '<div class="sl-report-scroll"><table class="sl-report-tbl"><thead><tr>'
+            + '<th>#</th>'
+            + '<th>Institution</th>'
+            + '<th' + thClick('composite') + '>Score' + arrow('composite') + '</th>'
+            + '<th' + thClick('land') + '>Land' + arrow('land') + '</th>'
+            + '<th' + thClick('urgency') + '>Urgency' + arrow('urgency') + '</th>'
+            + '<th' + thClick('pr') + '>PR' + arrow('pr') + '</th>'
+            + '<th' + thClick('acres') + '>Acres' + arrow('acres') + '</th>'
+            + '<th' + thClick('distress') + '>Distress' + arrow('distress') + '</th>'
+            + '<th>Enr. Trend</th>'
+            + '<th>Op. Margin</th>'
+            + '</tr></thead><tbody>';
+        scored.forEach(function(item, i) {
+            var r = item.r, s = item.s;
+            var enrTrend = parseFloat(r.enrollment_yoy_pct); enrTrend = !isNaN(enrTrend) ? enrTrend.toFixed(1)+'%' : '—';
+            var opMarg = parseFloat(r.operating_margin); opMarg = !isNaN(opMarg) ? opMarg.toFixed(1)+'%' : '—';
+            var ds = parseFloat(r.distress_score); ds = !isNaN(ds) ? ds.toFixed(0) : '—';
+            var barW = Math.max(3, Math.round(s.composite * 0.5));
+            var safeName = (r.institution_name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+            html += '<tr onclick="flyToInstitution(\'' + safeName + '\')" style="cursor:pointer">'
+                + '<td class="rank-cell">' + (i+1) + '</td>'
+                + '<td class="name-cell">' + (r.institution_name||'—') + '<div class="name-sub">' + [r.city, r.state].filter(Boolean).join(', ') + '</div></td>'
+                + '<td><span style="color:' + compositeColor(s.composite) + ';font-weight:700">' + s.composite + '</span>'
+                + ' <span class="sl-composite-bar" style="background:' + compositeColor(s.composite) + ';width:' + barW + 'px"></span></td>'
+                + '<td style="color:#10b981">' + s.land + '</td>'
+                + '<td style="color:#ff6b35">' + s.urgency + '</td>'
+                + '<td style="color:#a29bfe">' + s.pr + '</td>'
+                + '<td>' + (s.acres > 0 ? s.acres.toLocaleString() : '—') + '</td>'
+                + '<td>' + ds + '</td>'
+                + '<td style="color:' + (enrTrend !== '—' && parseFloat(enrTrend) < 0 ? '#ff6b35' : 'var(--text)') + '">' + enrTrend + '</td>'
+                + '<td style="color:' + (opMarg !== '—' && parseFloat(opMarg) < 0 ? '#ff6b35' : 'var(--text)') + '">' + opMarg + '</td>'
+                + '</tr>';
+        });
+        html += '</tbody></table></div>';
+        // Summary stats
+        var avgComp = scored.length ? Math.round(scored.reduce(function(a,b){ return a + b.s.composite; }, 0) / scored.length) : 0;
+        var avgLand = scored.length ? Math.round(scored.reduce(function(a,b){ return a + b.s.land; }, 0) / scored.length) : 0;
+        var withAcreage = scored.filter(function(x){ return x.s.acres > 0; }).length;
+        var summary = '<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">'
+            + '<div style="flex:1;background:var(--surface2);border-radius:6px;padding:6px 8px;text-align:center"><div style="font-family:var(--mono);font-size:14px;font-weight:700;color:' + compositeColor(avgComp) + '">' + avgComp + '</div><div style="font-size:8px;color:var(--text2)">Avg Score</div></div>'
+            + '<div style="flex:1;background:var(--surface2);border-radius:6px;padding:6px 8px;text-align:center"><div style="font-family:var(--mono);font-size:14px;font-weight:700;color:#10b981">' + avgLand + '</div><div style="font-size:8px;color:var(--text2)">Avg Land</div></div>'
+            + '<div style="flex:1;background:var(--surface2);border-radius:6px;padding:6px 8px;text-align:center"><div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text)">' + scored.length + '</div><div style="font-size:8px;color:var(--text2)">Institutions</div></div>'
+            + '<div style="flex:1;background:var(--surface2);border-radius:6px;padding:6px 8px;text-align:center"><div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text)">' + withAcreage + '</div><div style="font-size:8px;color:var(--text2)">With Acreage</div></div>'
+            + '</div>';
+        el.innerHTML = summary + html;
+    }
+    function sortSlReport(col) {
+        if (_slSortCol === col) _slSortDir *= -1;
+        else { _slSortCol = col; _slSortDir = -1; }
+        renderReport();
+    }
+
+    // ── Core shortlist functions ───────────────────────────────────────────
     function toggleStarFromPopup(btn) {
         var name = btn.getAttribute('data-name');
         if (shortlist.has(name)) {
@@ -1136,13 +1406,18 @@
     }
     function removeFromShortlist(name) {
         shortlist.delete(name);
+        // Also remove from batches
+        shortlistBatches.forEach(function(b) { b.names = b.names.filter(function(n){ return n !== name; }); });
+        shortlistBatches = shortlistBatches.filter(function(b){ return b.names.length > 0; });
         saveShortlist();
         updateShortlistCount();
         renderShortlistPanel();
         applyFilters();
     }
     function clearShortlist() {
+        if (shortlist.size && !confirm('Clear all ' + shortlist.size + ' shortlisted institutions?')) return;
         shortlist.clear();
+        shortlistBatches = [];
         saveShortlist();
         updateShortlistCount();
         renderShortlistPanel();
@@ -1170,16 +1445,25 @@
             }
         });
     }
-    function exportShortlist() {
+
+    // ── CSV Export (legacy) ────────────────────────────────────────────────
+    function exportShortlistCSV() {
         if (!shortlist.size) { alert('No institutions shortlisted.'); return; }
-        var COLS = ['institution_name','data_source','institution_type','city','state',
-            'distress_category','distress_score','risk_tier',
+        var COLS = ['rank','composite_score','land_score','urgency_score','pr_score',
+            'institution_name','data_source','institution_type','city','state',
+            'distress_category','distress_score','closure_risk_score','risk_tier',
             'revenue_2024','expenses_2024','net_income_2024','assets_2024','liabilities_2024',
             'equity_ratio','operating_margin','enrollment_2024','enrollment_yoy_pct',
-            'acreage_primary','acreage_primary_source','scraper_acres','osm_acres',
-            'plant_property_equipment','fte_staff','urbanization','latitude','longitude'];
-        var rows = [...shortlist].map(function(name) {
+            'acreage_primary','scraper_acres','osm_acres','urbanization','latitude','longitude'];
+        var scored = [...shortlist].map(function(name) {
             var r = allData.find(function(d){ return d.institution_name === name; }) || {};
+            var s = computeCompositeScore(r);
+            return { r: r, s: s };
+        }).sort(function(a,b){ return b.s.composite - a.s.composite; });
+        var rows = scored.map(function(item, i) {
+            var r = item.r, s = item.s;
+            r.rank = i + 1; r.composite_score = s.composite; r.land_score = s.land;
+            r.urgency_score = s.urgency; r.pr_score = s.pr;
             return COLS.map(function(c){ return '"'+String(r[c]||'').replace(/"/g,'""')+'"'; }).join(',');
         });
         var csv = COLS.join(',') + '\n' + rows.join('\n');
@@ -1187,6 +1471,105 @@
         var a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = 'hb_shortlist_' + new Date().toISOString().slice(0,10) + '.csv';
+        a.click();
+    }
+
+    // ── HTML Report Export ─────────────────────────────────────────────────
+    function exportShortlistReport() {
+        if (!shortlist.size) { alert('No institutions shortlisted.'); return; }
+        var scored = [...shortlist].map(function(name) {
+            var r = allData.find(function(d){ return d.institution_name === name; }) || {};
+            var s = computeCompositeScore(r);
+            return { name: name, r: r, s: s };
+        }).sort(function(a,b){ return b.s.composite - a.s.composite; });
+
+        var avgComp = Math.round(scored.reduce(function(a,b){ return a+b.s.composite; },0)/scored.length);
+        var avgLand = Math.round(scored.reduce(function(a,b){ return a+b.s.land; },0)/scored.length);
+        var avgUrg = Math.round(scored.reduce(function(a,b){ return a+b.s.urgency; },0)/scored.length);
+        var withAcres = scored.filter(function(x){ return x.s.acres>0; }).length;
+        var totalAcres = scored.reduce(function(a,b){ return a+b.s.acres; },0);
+        var dateStr = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+
+        var tableRows = scored.map(function(item, i) {
+            var r=item.r, s=item.s;
+            var ds = parseFloat(r.distress_score); ds = !isNaN(ds)?ds.toFixed(0):'—';
+            var cr = parseFloat(r.closure_risk_score); cr = !isNaN(cr)?(cr*100).toFixed(0)+'%':'—';
+            var enr = parseFloat(r.enrollment_2024); enr = !isNaN(enr)?Math.round(enr).toLocaleString():'—';
+            var enrT = parseFloat(r.enrollment_yoy_pct); enrT = !isNaN(enrT)?enrT.toFixed(1)+'%':'—';
+            var rev = parseFloat(r.revenue_2024); rev = !isNaN(rev)?'$'+Math.round(rev/1e6).toLocaleString()+'M':'—';
+            var om = parseFloat(r.operating_margin); om = !isNaN(om)?om.toFixed(1)+'%':'—';
+            var env = s.envScore != null ? s.envScore.toFixed(0) : '—';
+            var cColor = compositeColor(s.composite);
+            return '<tr>'
+                +'<td style="text-align:center;font-weight:700;color:#a29bfe">'+(i+1)+'</td>'
+                +'<td style="font-weight:600">'+item.name+'<div style="font-size:10px;color:#8b8fa3;font-weight:400">'+[r.city,r.state].filter(Boolean).join(', ')
+                    +' · '+(r.institution_type||'').replace(/Private Non-Profit \| /,'NP ').replace(/Private For-Profit \| /,'FP ').replace(/Public \| /,'Pub ')+'</div></td>'
+                +'<td style="text-align:center"><span style="display:inline-block;padding:3px 8px;border-radius:4px;font-weight:700;font-size:13px;color:'+cColor+';background:'+cColor+'15">'+s.composite+'</span></td>'
+                +'<td style="text-align:center;color:#10b981">'+s.land+'</td>'
+                +'<td style="text-align:center;color:#ff6b35">'+s.urgency+'</td>'
+                +'<td style="text-align:center;color:#a29bfe">'+s.pr+'</td>'
+                +'<td style="text-align:right">'+(s.acres>0?Math.round(s.acres).toLocaleString():'—')+'</td>'
+                +'<td style="text-align:center">'+ds+'</td>'
+                +'<td style="text-align:center">'+cr+'</td>'
+                +'<td style="text-align:right">'+enr+'</td>'
+                +'<td style="text-align:center;color:'+(enrT!=='—'&&parseFloat(enrT)<0?'#ff6b35':'#e2e4e9')+'">'+enrT+'</td>'
+                +'<td style="text-align:right">'+rev+'</td>'
+                +'<td style="text-align:center;color:'+(om!=='—'&&parseFloat(om)<0?'#ff6b35':'#e2e4e9')+'">'+om+'</td>'
+                +'<td style="text-align:center">'+env+'</td>'
+                +'<td style="font-size:10px;color:#8b8fa3">'+(r.urbanization||'—')+'</td>'
+                +'</tr>';
+        }).join('');
+
+        var reportHtml = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">'
+            +'<title>Hummingbird — Opportunity Report</title>'
+            +'<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">'
+            +'<style>'
+            +':root{--bg:#0f1117;--surface:#181a20;--surface2:#1e2028;--border:#2a2d37;--text:#e2e4e9;--text2:#8b8fa3;--accent:#6c5ce7;--accent2:#a29bfe;--mono:"JetBrains Mono",monospace;--font:"DM Sans",sans-serif;}'
+            +'*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;}'
+            +'.page{max-width:1400px;margin:0 auto;padding:40px 32px}'
+            +'.hdr{display:flex;align-items:flex-end;gap:16px;margin-bottom:32px;border-bottom:1px solid var(--border);padding-bottom:20px}'
+            +'.hdr-logo{font-size:22px;font-weight:700;background:linear-gradient(135deg,var(--accent2),#74b9ff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}'
+            +'.hdr-title{font-size:18px;font-weight:600;letter-spacing:-.3px}'
+            +'.hdr-date{font-size:11px;color:var(--text2);margin-left:auto;font-family:var(--mono)}'
+            +'.stats{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:28px}'
+            +'.stat{background:var(--surface2);border-radius:8px;padding:14px;text-align:center}'
+            +'.stat-val{font-size:22px;font-weight:700;font-family:var(--mono)}'
+            +'.stat-lbl{font-size:10px;color:var(--text2);margin-top:4px}'
+            +'.methodology{background:var(--surface2);border-radius:8px;padding:14px 18px;margin-bottom:24px;font-size:11px;color:var(--text2);line-height:1.6}'
+            +'.methodology b{color:var(--text);font-weight:600}'
+            +'table{width:100%;border-collapse:collapse;font-size:11px;font-family:var(--mono)}'
+            +'thead th{padding:8px 10px;text-align:left;font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--border);background:var(--surface2);position:sticky;top:0;white-space:nowrap}'
+            +'tbody td{padding:8px 10px;border-bottom:1px solid rgba(42,45,55,.4)}'
+            +'tbody tr:hover td{background:rgba(255,255,255,.02)}'
+            +'.footer{font-size:10px;color:var(--text2);text-align:right;margin-top:24px;padding-top:16px;border-top:1px solid var(--border)}'
+            +'@media print{body{background:#fff;color:#111}.page{padding:20px}table{font-size:9px}thead th{background:#f5f5f5;color:#333}tbody td{border-color:#ddd}.stat{border:1px solid #ddd}.methodology{border:1px solid #ddd}.hdr-logo{color:#6c5ce7;-webkit-text-fill-color:#6c5ce7}}'
+            +'</style></head><body><div class="page">'
+            +'<div class="hdr"><div class="hdr-logo">Hummingbird</div><div style="width:1px;height:20px;background:var(--border)"></div><div class="hdr-title">Opportunity Report</div><div class="hdr-date">'+dateStr+'</div></div>'
+            +'<div class="stats">'
+            +'<div class="stat"><div class="stat-val" style="color:var(--accent2)">'+scored.length+'</div><div class="stat-lbl">Institutions</div></div>'
+            +'<div class="stat"><div class="stat-val" style="color:'+compositeColor(avgComp)+'">'+avgComp+'</div><div class="stat-lbl">Avg Composite</div></div>'
+            +'<div class="stat"><div class="stat-val" style="color:#10b981">'+avgLand+'</div><div class="stat-lbl">Avg Land Score</div></div>'
+            +'<div class="stat"><div class="stat-val" style="color:#ff6b35">'+avgUrg+'</div><div class="stat-lbl">Avg Urgency</div></div>'
+            +'<div class="stat"><div class="stat-val">'+totalAcres.toLocaleString()+'</div><div class="stat-lbl">Total Acres</div></div>'
+            +'<div class="stat"><div class="stat-val">'+withAcres+'</div><div class="stat-lbl">With Acreage</div></div>'
+            +'</div>'
+            +'<div class="methodology"><b>Composite Score</b> = Land Potential (40%) + Urgency (35%) + Partnership Readiness (25%). '
+            +'Land potential includes acreage magnitude, OSM environment quality, land flags, and urbanization context. '
+            +'Urgency combines distress score, ML closure risk, and financial red flags. '
+            +'Partnership readiness evaluates state policy environment, funding landscape, and governance urgency.</div>'
+            +'<table><thead><tr>'
+            +'<th>#</th><th>Institution</th><th>Score</th><th>Land</th><th>Urgency</th><th>PR</th>'
+            +'<th style="text-align:right">Acres</th><th>Distress</th><th>ML Risk</th>'
+            +'<th style="text-align:right">Enrollment</th><th>Enr. Trend</th>'
+            +'<th style="text-align:right">Revenue</th><th>Op. Margin</th><th>Env Score</th><th>Urbanization</th>'
+            +'</tr></thead><tbody>'+tableRows+'</tbody></table>'
+            +'<div class="footer">Generated by Hummingbird Market Intelligence · '+dateStr+'</div>'
+            +'</div></body></html>';
+
+        var blob = new Blob([reportHtml], {type:'text/html'});
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'hb_opportunity_report_' + new Date().toISOString().slice(0,10) + '.html';
         a.click();
     }
 
@@ -1288,6 +1671,7 @@
             }
             return true;
         });
+        lastFilteredData = filtered;
         showMarkers(filtered);
     }
     function resetFilters(){
