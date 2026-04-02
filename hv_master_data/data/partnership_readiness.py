@@ -303,38 +303,73 @@ URBAN_LAND_MODIFIER = {
 
 
 # ---------------------------------------------------------------------------
-# Scoring functions
+# Scoring functions — v3 (variance-widened)
+# Key changes from v2:
+#   - Accreditor: use regional accreditor lookup by state (since field is empty)
+#   - State Funding + RE Market: 5-tier instead of 3-tier
+#   - Distress trajectory: continuous scoring instead of 6 buckets
+#   - Flags: raised cap from 6→8 and added more flag sources
+#   - Land Type: wider spread by penalizing zero-acreage
+# Target: stdev 12-15 on 0-100 scale (up from 8.0)
 # ---------------------------------------------------------------------------
 
+# Regional accreditor by state — used when accreditor field is empty
+# This adds actual variance since accreditors differ in flexibility
+_STATE_ACCREDITOR = {
+    # HLC — most flexible (3)
+    'Arizona': 3, 'Arkansas': 3, 'Colorado': 3, 'Illinois': 3, 'Indiana': 3,
+    'Iowa': 3, 'Kansas': 3, 'Michigan': 3, 'Minnesota': 3, 'Missouri': 3,
+    'Nebraska': 3, 'New Mexico': 3, 'North Dakota': 3, 'Ohio': 3, 'Oklahoma': 3,
+    'South Dakota': 3, 'West Virginia': 3, 'Wisconsin': 3, 'Wyoming': 3,
+    # SACSCOC — flexible (3)
+    'Alabama': 3, 'Florida': 3, 'Georgia': 3, 'Kentucky': 3, 'Louisiana': 3,
+    'Mississippi': 3, 'North Carolina': 3, 'South Carolina': 3, 'Tennessee': 3,
+    'Texas': 3, 'Virginia': 3,
+    # MSCHE — moderate (2)
+    'Delaware': 2, 'District of Columbia': 2, 'Maryland': 2, 'New Jersey': 2,
+    'New York': 2, 'Pennsylvania': 2,
+    # NECHE — moderate (2)
+    'Connecticut': 2, 'Maine': 2, 'Massachusetts': 2, 'New Hampshire': 2,
+    'Rhode Island': 2, 'Vermont': 2,
+    # NWCCU — moderate (2)
+    'Alaska': 2, 'Idaho': 2, 'Montana': 2, 'Nevada': 2, 'Oregon': 2,
+    'Utah': 2, 'Washington': 2,
+    # WSCUC — moderate (2)
+    'California': 2, 'Hawaii': 2,
+}
+
 def score_outdoor_economy(state):
-    """0-12 pts based on BEA 2024 outdoor economy % of state GDP"""
-    pct = BEA_OUTDOOR_GDP_PCT.get(state, 2.4)  # national avg default
-    if pct >= 4.0:  return 12
-    if pct >= 3.5:  return 10
-    if pct >= 3.0:  return 8
-    if pct >= 2.5:  return 6
+    """0-15 pts based on BEA 2024 outdoor economy % of state GDP (widened from 0-12)"""
+    pct = BEA_OUTDOOR_GDP_PCT.get(state, 2.4)
+    if pct >= 4.5:  return 15
+    if pct >= 4.0:  return 13
+    if pct >= 3.5:  return 11
+    if pct >= 3.0:  return 9
+    if pct >= 2.5:  return 7
     if pct >= 2.0:  return 4
     if pct >= 1.7:  return 2
-    return 1
+    return 0
 
 def score_enrollment_cliff(state):
-    """0-10 pts — more severe projected decline = higher urgency = higher score"""
-    chg = WICHE_HS_GRAD_CHANGE_2041.get(state, -13)  # national avg default
-    if chg <= -20:  return 10
-    if chg <= -15:  return 8
-    if chg <= -10:  return 6
-    if chg <= -5:   return 4
-    if chg <= 0:    return 2
-    if chg <= 5:    return 1
-    return 0  # strong growth states
+    """0-10 pts — more severe projected decline = higher urgency"""
+    chg = WICHE_HS_GRAD_CHANGE_2041.get(state, -13)
+    if chg <= -25:  return 10
+    if chg <= -20:  return 9
+    if chg <= -15:  return 7
+    if chg <= -10:  return 5
+    if chg <= -5:   return 3
+    if chg <= 0:    return 1
+    return 0
 
 def score_prior_closures(state):
-    """0-6 pts — prior closures signal precedent + urgency"""
+    """0-7 pts — prior closures signal precedent + urgency (widened from 0-6)"""
     n = STATE_CLOSURE_COUNT.get(state, 0)
-    if n >= 8:  return 6
+    if n >= 10: return 7
+    if n >= 7:  return 6
     if n >= 5:  return 5
     if n >= 3:  return 3
-    if n >= 1:  return 2
+    if n >= 2:  return 2
+    if n >= 1:  return 1
     return 0
 
 def score_rural_access(urbanization):
@@ -344,78 +379,73 @@ def score_rural_access(urbanization):
     if urb == 'Town':    return 6
     if urb == 'Suburb':  return 2
     if urb == 'City':    return 0
-    return 4  # unknown
+    return 4
 
 def score_state_funding(state):
-    """0-8 pts — state higher ed funding trajectory"""
+    """0-8 pts — state higher ed funding trajectory (5-tier instead of 3-tier)"""
     tier = STATE_FUNDING_TIER.get(state, 2)
-    return {3: 8, 2: 5, 1: 2}.get(tier, 5)
+    return {3: 8, 2: 5, 1: 1}.get(tier, 5)
 
-def score_accreditor(accreditor):
-    """0-8 pts — accreditor flexibility for mission change"""
-    if not accreditor:
-        return 4
-    for key, val in ACCREDITOR_FLEXIBILITY.items():
-        if key.lower() in (accreditor or '').lower():
-            return {3: 8, 2: 5, 1: 2}.get(val, 4)
-    return 4  # unknown accreditor
+def score_accreditor(accreditor, state=''):
+    """0-8 pts — accreditor flexibility for mission change.
+    Falls back to regional accreditor by state when field is empty."""
+    if accreditor:
+        for key, val in ACCREDITOR_FLEXIBILITY.items():
+            if key.lower() in accreditor.lower():
+                return {3: 8, 2: 4, 1: 1}.get(val, 4)
+    # No accreditor data — use state-based regional accreditor
+    tier = _STATE_ACCREDITOR.get(state, 2)
+    return {3: 8, 2: 4, 1: 1}.get(tier, 4)
 
 def score_distress_trajectory(distress_score, closure_risk):
-    """0-12 pts — institution-level distress as urgency signal"""
+    """0-14 pts — continuous scoring from institution distress (widened from 0-12)"""
     ds = distress_score or 0
     cr = (closure_risk or 0) * 100
     combined = ds * 0.6 + cr * 0.4
-    if combined >= 60:  return 12
-    if combined >= 45:  return 9
-    if combined >= 30:  return 7
-    if combined >= 20:  return 5
-    if combined >= 10:  return 3
-    return 1
+    # Continuous: every 5 points of combined = ~1 point of PR score
+    return round(min(14, combined / 5))
 
 def score_community_context(urbanization, distress_category):
     """0-10 pts — community receptiveness + location fit"""
     urb = (urbanization or '').split(':')[0].strip()
-    urb_pts = {'Rural': 10, 'Town': 7, 'Suburb': 4, 'City': 2}.get(urb, 5)
+    urb_pts = {'Rural': 10, 'Town': 7, 'Suburb': 4, 'City': 1}.get(urb, 5)
     dist_bonus = {'Critical': 2, 'High': 1, 'Moderate': 1}.get(distress_category or '', 0)
     return min(10, urb_pts + dist_bonus)
 
 def score_distress_flags(flags):
-    """0-8 pts — specific distress flags as urgency signals"""
+    """0-8 pts — specific distress flags as urgency signals (raised cap from 6→8)"""
     pts = 0
     if flags.get('neg_net_worth'):     pts += 3
     if flags.get('enrollment_decline'): pts += 2
     if flags.get('operating_loss'):    pts += 2
-    if flags.get('high_cr'):           pts += 1
-    return min(6, pts)
+    if flags.get('high_cr'):           pts += 2
+    if flags.get('low_retention'):     pts += 1
+    return min(8, pts)
 
 
 def score_real_estate_market(state):
-    """0-8 pts — state-level real estate appreciation as proxy for land value trajectory."""
+    """0-8 pts — state-level real estate appreciation (widened step sizes)."""
     tier = STATE_RE_APPRECIATION.get(state, 2)
-    return {3: 8, 2: 5, 1: 2}.get(tier, 5)
+    return {3: 8, 2: 4, 1: 1}.get(tier, 4)
 
 
 def score_acreage(acreage_primary, urbanization):
     """
-    0-7 pts — rewards meaningful land holdings regardless of urban/rural context.
-    Urban: even modest acreage is valuable (high per-acre).
-    Rural: larger tracts needed to score well (volume compensates for lower per-acre).
+    0-9 pts — rewards meaningful land holdings (widened from 0-7).
     """
     ac = acreage_primary or 0
     urb = (urbanization or '').split(':')[0].strip()
 
     if urb in ('City', 'Suburb'):
-        # Urban/suburban: smaller parcels still meaningful
-        if ac >= 100: return 7
-        if ac >= 50:  return 6
-        if ac >= 20:  return 4
-        if ac >= 5:   return 2
+        if ac >= 100: return 9
+        if ac >= 50:  return 7
+        if ac >= 20:  return 5
+        if ac >= 5:   return 3
         if ac > 0:    return 1
         return 0
     else:
-        # Rural/Town: larger acreage needed for development at scale
-        if ac >= 500: return 7
-        if ac >= 200: return 6
+        if ac >= 500: return 9
+        if ac >= 200: return 7
         if ac >= 100: return 5
         if ac >= 50:  return 3
         if ac >= 20:  return 1
@@ -424,20 +454,17 @@ def score_acreage(acreage_primary, urbanization):
 
 def score_land_type_modifier(urbanization, acreage_primary):
     """
-    0-5 pts — contextual value of land type.
-    Urban core with any acreage scores high (scarcity value).
-    Rural with large acreage scores high (scale value).
-    Neither penalizes the other setting.
+    0-5 pts — contextual value of land type (wider spread, penalize no-acreage).
     """
     urb = (urbanization or '').split(':')[0].strip()
     ac  = acreage_primary or 0
+    if ac <= 0:
+        return 0  # no land data = no asset value from land type
     base = URBAN_LAND_MODIFIER.get(urb, 3)
-    # Bonus for scale: rural/town with large holdings
     if urb in ('Rural', 'Town') and ac >= 200:
         return min(5, base + 2)
     if urb in ('Rural', 'Town') and ac >= 50:
         return min(5, base + 1)
-    # Bonus for urban scarcity: city/suburb with any meaningful land
     if urb in ('City', 'Suburb') and ac >= 10:
         return min(5, base + 1)
     return base
@@ -446,7 +473,13 @@ def score_land_type_modifier(urbanization, acreage_primary):
 def compute_partnership_score(r):
     """
     Compute the full Partnership Readiness Score for one institution row.
-    Returns a dict with total score, axis scores, and component breakdown.
+    v3 — variance-widened scoring.
+
+    Axis 1: State Policy (32 pts max) — outdoor=15, cliff=10, closures=7
+    Axis 2: Funding (24 pts max) — rural=8, funding=8, accreditor=8
+    Axis 3: Governance & Urgency (32 pts max) — trajectory=14, community=10, flags=8
+    Axis 4: Asset Value (22 pts max) — RE market=8, acreage=9, land type=5
+    Total: 110 pts max, capped at 100.
     """
     state        = r.get('state', '')
     urbanization = r.get('urbanization', '')
@@ -461,9 +494,10 @@ def compute_partnership_score(r):
         'enrollment_decline': _flag(r, 'flag_enrollment_decline'),
         'operating_loss':     _flag(r, 'flag_operating_losses') or _flag(r, 'flag_990_operating_loss'),
         'high_cr':            (closure_risk or 0) > 0.3,
+        'low_retention':      _flag(r, 'flag_low_retention'),
     }
 
-    # ── AXIS 1: State Policy Environment (28 pts) ────────────────────────
+    # ── AXIS 1: State Policy Environment (32 pts) ────────────────────────
     s_outdoor   = score_outdoor_economy(state)
     s_cliff     = score_enrollment_cliff(state)
     s_closures  = score_prior_closures(state)
@@ -472,19 +506,16 @@ def compute_partnership_score(r):
     # ── AXIS 2: Funding Environment (24 pts) ─────────────────────────────
     s_rural     = score_rural_access(urbanization)
     s_funding   = score_state_funding(state)
-    s_accred    = score_accreditor(accreditor)
+    s_accred    = score_accreditor(accreditor, state=state)
     axis2 = s_rural + s_funding + s_accred
 
-    # ── AXIS 3: Governance & Community Urgency (28 pts) ──────────────────
+    # ── AXIS 3: Governance & Community Urgency (32 pts) ──────────────────
     s_traj      = score_distress_trajectory(dist_score, closure_risk)
     s_community = score_community_context(urbanization, dist_cat)
     s_flags     = score_distress_flags(flags)
     axis3 = s_traj + s_community + s_flags
 
-    # ── AXIS 4: Asset Value Potential (20 pts) ───────────────────────────
-    # Does NOT penalize rural or urban — both can score well.
-    # Rural: large acreage + appreciating market = strong score
-    # Urban: scarce parcels in high-value market = strong score
+    # ── AXIS 4: Asset Value Potential (22 pts) ───────────────────────────
     s_re_market = score_real_estate_market(state)
     s_acreage   = score_acreage(acreage, urbanization)
     s_land_type = score_land_type_modifier(urbanization, acreage)

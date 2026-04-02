@@ -138,12 +138,52 @@ CATEGORY_WEIGHTS = {
 }
 MAX_CATEGORY_SCORE = sum(CATEGORY_WEIGHTS.values())
 
-def score_osm_environment(by_category, feature_count=0, radius_miles=20, urbanization=None):
+# ---------------------------------------------------------------------------
+# Winter climate multiplier
+# Gondolas, sky rides, drag lifts in warm states are tourism infrastructure
+# (theme parks, zoos, scenic rides), not winter sports development potential.
+# Cold-climate states get full credit; warm states get heavy discount.
+# ---------------------------------------------------------------------------
+_WINTER_CLIMATE_MULT = {
+    # Full credit — genuine winter sports states
+    'Alaska': 1.0, 'Colorado': 1.0, 'Idaho': 1.0, 'Maine': 1.0,
+    'Michigan': 1.0, 'Minnesota': 1.0, 'Montana': 1.0, 'New Hampshire': 1.0,
+    'New York': 1.0, 'Oregon': 1.0, 'Utah': 1.0, 'Vermont': 1.0,
+    'Washington': 1.0, 'Wisconsin': 1.0, 'Wyoming': 1.0,
+    # Moderate — some winter sports potential in highland areas
+    'California': 0.7, 'Connecticut': 0.8, 'Illinois': 0.7,
+    'Indiana': 0.7, 'Iowa': 0.7, 'Kansas': 0.6, 'Kentucky': 0.5,
+    'Maryland': 0.6, 'Massachusetts': 0.8, 'Missouri': 0.5,
+    'Nebraska': 0.6, 'Nevada': 0.7, 'New Jersey': 0.7,
+    'New Mexico': 0.6, 'North Carolina': 0.5, 'North Dakota': 0.9,
+    'Ohio': 0.7, 'Pennsylvania': 0.8, 'Rhode Island': 0.7,
+    'South Dakota': 0.8, 'Virginia': 0.5, 'West Virginia': 0.7,
+    'Delaware': 0.5,
+    # Heavy discount — warm climates where "winter" features are tourism noise
+    'Alabama': 0.15, 'Arizona': 0.15, 'Arkansas': 0.2,
+    'Florida': 0.1, 'Georgia': 0.15, 'Hawaii': 0.05,
+    'Louisiana': 0.1, 'Mississippi': 0.1, 'Oklahoma': 0.2,
+    'South Carolina': 0.15, 'Tennessee': 0.3, 'Texas': 0.15,
+    'District of Columbia': 0.4,
+}
+
+def _get_winter_climate_mult(state):
+    """Return a 0.0-1.0 multiplier for winter feature relevance in this state."""
+    if not state:
+        return 0.5  # unknown — moderate discount
+    return _WINTER_CLIMATE_MULT.get(state.strip(), 0.5)
+
+
+def score_osm_environment(by_category, feature_count=0, radius_miles=20,
+                          urbanization=None, state=None):
     if not by_category:
         return {'score': None, 'feature_score': None, 'category_score': None,
                 'density_bonus': None, 'radius_bonus': None,
-                'context_mult': None, 'urbanization': urbanization,
+                'context_mult': None, 'winter_climate_mult': None,
+                'urbanization': urbanization,
                 'breakdown': [], 'top_features': [], 'has_osm_data': False}
+
+    winter_mult = _get_winter_climate_mult(state)
 
     breakdown = []
     label_best = {}
@@ -155,6 +195,9 @@ def score_osm_environment(by_category, feature_count=0, radius_miles=20, urbaniz
             if tier is None: continue
             named, unnamed = _count_named_unnamed(display)
             mult = NAMED_MULTIPLIER if named > 0 else UNNAMED_MULTIPLIER
+            # Apply winter climate discount for winter features in warm states
+            if cat == 'winter':
+                mult *= winter_mult
             if label not in label_best or mult > label_best[label][0]:
                 label_best[label] = (mult, named, unnamed, tier, cat)
 
@@ -171,8 +214,12 @@ def score_osm_environment(by_category, feature_count=0, radius_miles=20, urbaniz
 
     MAX_FEATURE_RAW = 120.0
     feature_score = min(100.0, (raw_pts / MAX_FEATURE_RAW) * 100.0)
-    cat_raw = sum(CATEGORY_WEIGHTS.get(cat, 0) for cat in by_category.keys())
-    category_score = min(100.0, (cat_raw / MAX_CATEGORY_SCORE) * 100.0)
+    # Also discount the winter category weight for warm states
+    effective_cat_weights = dict(CATEGORY_WEIGHTS)
+    effective_cat_weights['winter'] = CATEGORY_WEIGHTS['winter'] * winter_mult
+    cat_raw = sum(effective_cat_weights.get(cat, 0) for cat in by_category.keys())
+    effective_max = sum(effective_cat_weights.values())
+    category_score = min(100.0, (cat_raw / max(effective_max, 1)) * 100.0)
     try: fc = max(0, int(feature_count))
     except: fc = 0
     density_score = min(100.0, (math.log1p(fc) / math.log1p(50)) * 100.0)
@@ -200,6 +247,7 @@ def score_osm_environment(by_category, feature_count=0, radius_miles=20, urbaniz
             'density_bonus': round(density_score, 1),
             'radius_bonus': round(radius_score, 1),
             'context_mult': round(context_mult, 2),
+            'winter_climate_mult': round(winter_mult, 2),
             'urbanization': urbanization,
             'breakdown': breakdown, 'top_features': top_features,
             'has_osm_data': True}
@@ -220,18 +268,20 @@ def score_color(score):
     if score >= 35:    return '#ff6b35'
     return '#8b8fa3'
 
-def score_from_osm_row(osm_row, parse_fn, urbanization=None):
+def score_from_osm_row(osm_row, parse_fn, urbanization=None, state=None):
     """
     Convenience wrapper: given a raw OSM CSV row dict and the
     parse_osm_feature_string function, return a full score dict.
     Pass urbanization string from the master CSV for context adjustment.
+    Pass state for winter climate discounting.
     """
     feat_str = osm_row.get('osm_env_features', '').strip()
     by_cat   = parse_fn(feat_str)
     count    = osm_row.get('osm_env_count', 0)
     radius   = osm_row.get('osm_env_radius_miles', 20)
     return score_osm_environment(by_cat, feature_count=count,
-                                 radius_miles=radius, urbanization=urbanization)
+                                 radius_miles=radius, urbanization=urbanization,
+                                 state=state)
     test_by_cat = {
         'winter': [
             {'label': 'Ski Resort',          'display': 'Stowe Mountain Resort'},
