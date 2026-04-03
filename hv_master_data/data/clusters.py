@@ -1,17 +1,16 @@
 """
-clusters.py v3 — Hummingbird Ventures Opportunity Cluster Engine
+clusters.py v4 — Hummingbird Ventures Opportunity Cluster Engine
 =================================================================
-Rebuilt around three axes meaningful to HV's acquisition thesis:
-  1. URGENCY    — how close is this to transacting?
-  2. LAND       — how much underleveraged physical asset is here?
-  3. PR FIT     — does the environment match outdoor/wellness programming?
+3-axis clustering using pre-computed scores:
+  1. URGENCY    — how close is this institution to transacting?
+  2. LAND       — how much developable physical asset is here?
+  3. PR FIT     — partnership readiness (state policy + funding + urgency + asset value)
 
-Institution type is used for LABELING only, not as a clustering feature.
-All IPEDS institutions are clustered together (K=6).
-990 nonprofits are clustered together (K=5).
+IPEDS: K=8 clusters, 3-axis k-means on (urgency, land, PR)
+990:   K=5 clusters, urgency-focused (most have no land data)
 
-OSM environment score (0-100) from osm_scorer.py is used as a direct
-feature, replacing the coarse one-hot category flags.
+Cluster labels are ACTION-ORIENTED:
+  "Immediate Targets" / "Sweet Spot" / "Long-Term Watch" / etc.
 """
 
 import os, sys, csv, json, math, argparse, warnings, datetime
@@ -23,7 +22,7 @@ DEFAULT_OSM      = 'hv_master_data/acreage_scripts/osm_land_results.csv'
 DEFAULT_OUT_HTML = 'clusters.html'
 DEFAULT_OUT_CSV  = 'hv_master_data/data/Hummingbird_Master_Clustered.csv'
 
-K_IPEDS = 6
+K_IPEDS = 8
 K_HB990 = 5
 
 OSM_CATS = ['water','winter','outdoor_recreation','protected_land',
@@ -108,44 +107,10 @@ _STATE_FUNDING = {
 }
 
 def compute_pr_score(r):
-    """Compute 0-100 Partnership Readiness Score from a row dict."""
-    state = r.get('state','')
-    urb   = (r.get('urbanization','') or '').split(':')[0].strip()
-    ds    = fv(r,'distress_score') or 0
-    cr    = (fv(r,'closure_risk_score') or 0) * 100
-    dist_cat = r.get('distress_category','')
-
-    # Axis 1: State Policy (35 pts)
-    bea  = _BEA_OUTDOOR.get(state, 2.4)
-    cliff= _WICHE_CLIFF.get(state, -13)
-    ncls = _STATE_CLOSURES.get(state, 0)
-    s1a = 15 if bea>=4.0 else 13 if bea>=3.5 else 11 if bea>=3.0 else 9 if bea>=2.5 else 7 if bea>=2.0 else 5 if bea>=1.7 else 3
-    s1b = 12 if cliff<=-20 else 10 if cliff<=-15 else 8 if cliff<=-10 else 6 if cliff<=-5 else 4 if cliff<=0 else 2 if cliff<=5 else 0
-    s1c = 8 if ncls>=8 else 6 if ncls>=5 else 4 if ncls>=3 else 2 if ncls>=1 else 0
-    axis1 = s1a + s1b + s1c
-
-    # Axis 2: Funding (30 pts)
-    s2a = {'Rural':10,'Town':7,'Suburb':3,'City':0}.get(urb, 5)
-    ft  = _STATE_FUNDING.get(state, 2)
-    s2b = {3:10, 2:6, 1:2}.get(ft, 6)
-    s2c = 5  # accreditor unknown — neutral default
-    axis2 = s2a + s2b + s2c
-
-    # Axis 3: Governance/Urgency (35 pts)
-    combined = ds * 0.6 + cr * 0.4
-    s3a = 15 if combined>=60 else 12 if combined>=45 else 9 if combined>=30 else 6 if combined>=20 else 3 if combined>=10 else 1
-    urb_pts = {'Rural':12,'Town':9,'Suburb':5,'City':2}.get(urb, 6)
-    dist_bonus = {'Critical':2,'High':2,'Moderate':1}.get(dist_cat, 0)
-    s3b = min(12, urb_pts + dist_bonus)
-    s3c  = 0
-    if flag(r,'flag_negative_net_worth') or flag(r,'flag_990_negative_net_assets'): s3c += 3
-    if flag(r,'flag_enrollment_decline'): s3c += 2
-    if flag(r,'flag_operating_losses') or flag(r,'flag_990_operating_loss'): s3c += 2
-    if (fv(r,'closure_risk_score') or 0) > 0.3: s3c += 1
-    s3c = min(8, s3c)
-    axis3 = s3a + s3b + s3c
-
-    return round(min(100, max(0, axis1 + axis2 + axis3)))
+    """Read Partnership Readiness Score from master CSV (pre-computed by partnership_readiness.py v3).
+    Falls back to 46 (median) if not present."""
+    v = fv(r, 'partnership_readiness_score')
+    return round(v) if v is not None else 46
 
 
 # ---------------------------------------------------------------------------
@@ -314,86 +279,23 @@ def parse_osm_feature_string(feat_str):
     return by_category
 
 # ---------------------------------------------------------------------------
-# IPEDS feature extraction — urgency + land + HV fit axes
+# IPEDS feature extraction — 3-axis: urgency, land, PR
 # ---------------------------------------------------------------------------
 def extract_ipeds_features(rows, osm_scores):
-    feat_names = [
-        # ── URGENCY AXIS ──────────────────────────────────────────────
-        'distress_score',
-        'closure_risk_score',
-        'enrollment_score_ipeds',
-        'solvency_score_ipeds',
-        'operating_score_ipeds',
-        'enrollment_2yr_pct',        # trajectory
-        'revenue_2yr_pct',           # trajectory
-        'flag_enrollment_decline',
-        'flag_operating_losses',
-        'flag_negative_net_worth',
-        'flag_high_tuition_dependency',
-        # ── LAND AXIS ────────────────────────────────────────────────
-        'log_acreage',
-        'flag_rural_suburban',
-        'flag_land_potential',
-        'flag_high_land_potential',
-        'urban_city', 'urban_suburb', 'urban_town', 'urban_rural',
-        # ── PR FIT AXIS ──────────────────────────────────────────────
-        'pr_score',                  # 0-100 Partnership Readiness Score
-        # ── SIZE CONTROLS ────────────────────────────────────────────
-        'log_enrollment',
-        'log_revenue',
-        # ── REGION ───────────────────────────────────────────────────
-        'region_ne','region_se','region_mw','region_sw','region_w',
-    ]
-
+    feat_names = ['urgency', 'land', 'pr']
     raw = defaultdict(list)
     valid_indices = []
 
     for i, r in enumerate(rows):
         if r.get('data_source') != 'IPEDS': continue
-        ug  = (r.get('urbanization','') or '').split(':')[0].strip()
-        reg = STATE_REGION.get(r.get('state',''), 'Unknown')
-        acres = fv(r,'acreage_primary') or fv(r,'scraper_acres') or fv(r,'osm_acres')
-        osm_s = osm_scores.get(r.get('institution_name',''), {}).get('score')
-
         vals = [
-            fv(r,'distress_score'),
-            fv(r,'closure_risk_score'),
-            fv(r,'enrollment_score_ipeds'),
-            fv(r,'solvency_score_ipeds'),
-            fv(r,'operating_score_ipeds'),
-            fv(r,'enrollment_2yr_pct'),
-            fv(r,'revenue_2yr_pct'),
-            1.0 if flag(r,'flag_enrollment_decline') else 0.0,
-            1.0 if flag(r,'flag_operating_losses') else 0.0,
-            1.0 if flag(r,'flag_negative_net_worth') else 0.0,
-            1.0 if flag(r,'flag_high_tuition_dependency') else 0.0,
-            safe_log(acres),
-            1.0 if flag(r,'flag_rural_suburban') else 0.0,
-            1.0 if flag(r,'flag_land_potential') else 0.0,
-            1.0 if flag(r,'flag_high_land_potential') else 0.0,
-            1.0 if ug=='City' else 0.0,
-            1.0 if ug=='Suburb' else 0.0,
-            1.0 if ug=='Town' else 0.0,
-            1.0 if ug=='Rural' else 0.0,
-            compute_pr_score(r),
-            safe_log(fv(r,'enrollment_2024')),
-            safe_log(fv(r,'revenue_2024')),
-            1.0 if reg=='Northeast' else 0.0,
-            1.0 if reg=='Southeast' else 0.0,
-            1.0 if reg=='Midwest' else 0.0,
-            1.0 if reg=='Southwest' else 0.0,
-            1.0 if reg=='West' else 0.0,
+            inst_urgency(r, 'IPEDS'),
+            inst_land(r),
+            float(compute_pr_score(r)),
         ]
         for j, name in enumerate(feat_names):
             raw[name].append(vals[j])
         valid_indices.append(i)
-
-    continuous = ['distress_score','closure_risk_score','enrollment_score_ipeds',
-                  'solvency_score_ipeds','operating_score_ipeds','enrollment_2yr_pct',
-                  'revenue_2yr_pct','log_acreage','pr_score',
-                  'log_enrollment','log_revenue']
-    for col in continuous:
-        raw[col] = impute_median(raw[col])
 
     n = len(valid_indices)
     matrix = [[raw[feat][i] for feat in feat_names] for i in range(n)]
@@ -439,7 +341,7 @@ def extract_990_features(rows, osm_scores):
         if r.get('data_source') != 'Hummingbird_990': continue
         it   = r.get('institution_type','')
         reg  = STATE_REGION.get(r.get('state',''), 'Unknown')
-        acres = fv(r,'scraper_acres') or fv(r,'osm_acres')
+        acres = fv(r,'acreage_primary') or fv(r,'scraper_acres') or fv(r,'osm_acres')
         osm_s = osm_scores.get(r.get('institution_name',''), {}).get('score')
 
         vals = [
@@ -541,92 +443,119 @@ def axis_scores(rows, osm_scores, source='IPEDS'):
     return urgency, land, fit
 
 # ---------------------------------------------------------------------------
-# IPEDS cluster naming — thesis-first
+# IPEDS cluster naming — action-oriented, based on 3-axis position
 # ---------------------------------------------------------------------------
 def name_ipeds_cluster(rows, cid, osm_scores):
-    ds   = med_of(rows, 'distress_score')
-    cr   = med_of(rows, 'closure_risk_score') or 0
-    enr  = med_of(rows, 'enrollment_2024') or 0
-    rev  = med_of(rows, 'revenue_2024') or 0
-    acres = med_of(rows,'acreage_primary') or med_of(rows,'scraper_acres') or 0
-    pct_rural    = pct_of(rows, 'flag_rural_suburban')
-    pct_op_loss  = pct_of(rows, 'flag_operating_losses')
-    pct_neg_nw   = pct_of(rows, 'flag_negative_net_worth')
-    pct_enr_dec  = pct_of(rows, 'flag_enrollment_decline')
-    pct_land     = pct_of(rows, 'flag_land_potential')
-    top_urb = (top_of(rows, 'urbanization') or '').split(':')[0].strip()
-
-    types = Counter(r.get('institution_type','') for r in rows)
-    pct_public = sum(v for k,v in types.items() if 'Public' in k) / max(len(rows),1) * 100
-    pct_pnp    = sum(v for k,v in types.items() if 'Non-Profit' in k) / max(len(rows),1) * 100
-    pct_pfp    = sum(v for k,v in types.items() if 'For-Profit' in k) / max(len(rows),1) * 100
-    top_region = Counter(STATE_REGION.get(r.get('state',''),'Unknown') for r in rows).most_common(1)[0][0]
-
     urgency, land, fit = axis_scores(rows, osm_scores, 'IPEDS')
 
-    # ── Naming based on what the data actually shows ──────────────────────────
+    avg_acres = sum((fv(r,'acreage_primary') or fv(r,'scraper_acres') or fv(r,'osm_acres') or 0) for r in rows) / max(len(rows),1)
+    pct_rural = pct_of(rows, 'flag_rural_suburban')
+    pct_land  = pct_of(rows, 'flag_land_potential')
+    top_urb   = (top_of(rows, 'urbanization') or '').split(':')[0].strip()
 
-    # High closure risk + enrollment collapse → most urgent target
-    if cr > 0.25 and pct_enr_dec > 60:
-        name, icon, color = 'Enrollment Collapse — High Risk', '📉', '#ff4757'
-        desc = ('Institutions facing catastrophic enrollment decline with elevated closure '
-                'risk scores. Predominantly small for-profit programs but includes struggling '
-                'private colleges. Many are past the point of recovery.')
-        hv_angle = 'Highest transaction probability. Small footprint limits land value but campus closures are imminent — build relationships now.'
+    # ── Action-oriented naming based on axis positions ──────────────────
+    u_hi = urgency > 30
+    u_med = urgency > 15
+    l_hi = land > 50
+    l_med = land > 20
+    p_hi = fit > 52 if fit else False
+    p_med = fit > 42 if fit else True
+
+    if u_hi and l_med:
+        # Sub-differentiate: higher urgency vs more land
+        if urgency > 45:
+            name = 'Immediate Targets — Acute Distress'
+            desc = (f'The most urgently distressed institutions in the dataset that also hold developable land. '
+                    f'Avg {avg_acres:.0f} acres, {pct_rural}% rural/suburban. Financial crisis is active — '
+                    f'these institutions are at or near the point of closure or forced asset disposition.')
+            hv_angle = 'Highest priority. Active financial crisis + tangible land = near-term acquisition opportunity. Move fast.'
+        else:
+            name = 'Immediate Targets — Distressed w/ Land'
+            desc = (f'Institutions with significant financial distress AND developable land assets. '
+                    f'Avg {avg_acres:.0f} acres, {pct_rural}% rural/suburban. Distress is real and building — '
+                    f'these are high-probability targets within 1-2 years.')
+            hv_angle = 'Act now. Financial pressure is mounting and land assets are meaningful. Sort by acreage to prioritize outreach.'
+        icon, color = '🔴', '#ff4757'
         priority = 1
 
-    # Balance sheet crisis — negative net worth widespread
-    elif pct_neg_nw > 50:
-        name, icon, color = 'Balance Sheet Crisis', '🔴', '#ff4757'
-        desc = ('Institutions with widespread negative net worth — liabilities exceed assets '
-                'across most of the cluster. Often larger institutions (community colleges, '
-                'public 4-years) running persistent operating losses. Structural insolvency.')
-        hv_angle = 'Distress is deep and structural. Larger campuses mean more land — sort by acreage for acquisition targets.'
+    elif u_hi and not l_med:
+        name = 'Distressed — Partnership Only'
+        icon, color = '🟠', '#ff6b35'
+        desc = (f'High financial distress but minimal land holdings. Predominantly urban for-profit '
+                f'and small private institutions. The urgency is real but the land thesis doesn\'t apply — '
+                f'value is in relationships, IP, or facility conversion.')
+        hv_angle = 'Partnership plays only. No meaningful land — focus on program licensing, facility leases, or referral agreements.'
         priority = 2
 
-    # 100% rural
-    elif top_urb == 'Rural' and pct_public > 50:
-        name, icon, color = 'Rural Public Colleges', '🌲', '#00b894'
-        desc = ('Rural public 2-year colleges and branch campuses. Stable finances but '
-                'facing demographic headwinds. Meaningful acreage in genuinely rural '
-                'settings — the strongest land and environment profile in the dataset.')
-        hv_angle = 'Best long-term land targets. Rural location + public ownership means facilities will eventually consolidate or divest.'
+    elif u_med and l_hi and p_hi:
+        name = 'Sweet Spot — Land-Rich, High PR Fit'
+        icon, color = '🎯', '#00b894'
+        desc = (f'The best combination in the dataset: meaningful land ({avg_acres:.0f} avg acres), '
+                f'moderate financial pressure creating willingness to partner, and strong state policy alignment. '
+                f'{pct_rural}% rural/suburban. These institutions are primed for the outdoor/wellness thesis.')
+        hv_angle = 'PRIMARY PIPELINE. Build relationships now — these become acquisition targets as demographic pressure intensifies over 2-5 years.'
+        priority = 1
+
+    elif u_med and l_hi:
+        name = 'Pipeline — Land-Rich, Moderate Pressure'
+        icon, color = '🟡', '#ffa502'
+        desc = (f'Large land holdings ({avg_acres:.0f} avg acres) with moderate but real financial pressure. '
+                f'Not yet in crisis, but enrollment trends and operating losses are building. '
+                f'Predominantly {top_urb.lower()} locations.')
+        hv_angle = 'Build relationships early. These are 2-4 year targets — the land is excellent and pressure is mounting.'
         priority = 3
 
-    # Town-based colleges
-    elif top_urb == 'Town':
-        name, icon, color = 'Small Town Colleges', '🏘', '#74b9ff'
-        desc = ('Colleges located in small towns and rural-fringe areas. Mix of public '
-                'community colleges and private institutions. Good acreage, authentic rural '
-                'character, and moderate financial pressure make this a strong pipeline segment.')
-        hv_angle = 'Strong pipeline segment. Town-based campuses often have the best combination of accessible location and meaningful land.'
-        priority = 3
-
-    # 100% suburban
-    elif top_urb == 'Suburb':
-        name, icon, color = 'Suburban Campus Mix', '🏫', '#a29bfe'
-        desc = ('Suburban institutions across all ownership types. Meaningful acreage '
-                'but proximity to metros reduces programming fit for outdoor thesis. '
-                'Financial health is moderate — watch list for campus consolidations.')
-        hv_angle = 'Secondary pipeline. Suburban campuses have land but environment scores will be penalized for urban proximity.'
+    elif u_med and not l_hi:
+        name = 'Watch List — Moderate Pressure, Low Land'
+        icon, color = '⚠️', '#a29bfe'
+        desc = (f'Moderate financial distress but limited land assets. Mix of suburban and urban '
+                f'institutions feeling demographic and financial headwinds. Worth monitoring for '
+                f'campus consolidation opportunities.')
+        hv_angle = 'Secondary pipeline. Monitor for campus closures or consolidation announcements that create land opportunities.'
         priority = 4
 
-    # 100% city
-    elif top_urb == 'City':
-        name, icon, color = 'Urban Institutions', '🏙', '#ff6b35'
-        desc = ('Urban institutions across all ownership types — city-concentrated with '
-                'minimal acreage and low rural character. Financial pressure is moderate. '
-                'Asset value is in the real estate, not the surrounding environment.')
-        hv_angle = 'Low fit for outdoor/wellness thesis. Urban real estate plays only — sort by acreage for building asset value.'
+    elif not u_med and l_hi and p_hi:
+        name = 'Long-Term — Land-Rich, Strong PR, Stable'
+        icon, color = '🌲', '#10b981'
+        desc = (f'Financially healthy institutions with the best land profiles in the dataset '
+                f'({avg_acres:.0f} avg acres) and strong policy fit. {pct_rural}% rural/suburban. '
+                f'No urgency today, but these are the premier long-term targets as demographics shift.')
+        hv_angle = 'Relationship-building phase. These institutions will face pressure in 5-10 years. Be the known partner when they do.'
         priority = 5
 
+    elif not u_med and l_hi:
+        # Sub-differentiate: stronger PR fit vs weaker
+        if fit and fit > 48:
+            name = 'Stable — Land-Rich, Good PR Fit'
+            icon, color = '🏫', '#74b9ff'
+            desc = (f'Healthy institutions with meaningful land ({avg_acres:.0f} avg acres) and decent '
+                    f'state policy alignment. {pct_rural}% rural/suburban. No urgency today but the '
+                    f'land + policy combination makes these strong long-term targets.')
+            hv_angle = 'Long-term relationship building. Good land, reasonable policy fit — these become targets as demographics shift.'
+        else:
+            name = 'Stable — Land-Rich, Urban Leaning'
+            icon, color = '🏫', '#636e72'
+            desc = (f'Healthy institutions with meaningful land ({avg_acres:.0f} avg acres) but weaker '
+                    f'state policy alignment or more urban/suburban locations. The land is real but the '
+                    f'outdoor thesis fit and partnership path is longer.')
+            hv_angle = 'Long-term watch. Strong land assets but location or policy environment reduces near-term fit.'
+        priority = 6
+
+    elif not u_med and not l_hi and not p_med:
+        name = 'Low Fit — Urban, No Land, Low PR'
+        icon, color = '⚪', '#636e72'
+        desc = (f'Urban institutions with minimal land, low distress, and weak policy fit. '
+                f'Predominantly city-based for-profit programs. Low alignment with the outdoor/wellness thesis.')
+        hv_angle = 'Not actionable for land thesis. Deprioritize unless a specific campus closure creates an opportunity.'
+        priority = 7
+
     else:
-        name, icon, color = 'Mixed Profile — Watch List', '⚠️', '#ffa502'
-        desc = ('Institutions with mixed geographic and financial profiles. Moderate distress '
-                'across varied ownership types and locations. Worth monitoring as '
-                'demographic pressures intensify.')
-        hv_angle = 'Build relationships now. These become more actionable as enrollment demographics shift over the next 5 years.'
-        priority = 4
+        name = 'Mixed Profile — Monitor'
+        icon, color = '📋', '#8b8fa3'
+        desc = (f'Institutions with mixed signals across urgency, land, and partnership readiness. '
+                f'No single axis stands out. Worth periodic review as conditions evolve.')
+        hv_angle = 'Periodic review. Filter by state or type to find individual opportunities within this group.'
+        priority = 5
 
     return _make_cluster(cid, name, icon, color, desc, hv_angle, priority,
                          rows, 'IPEDS', osm_scores, urgency, land, fit)
@@ -640,7 +569,7 @@ def name_990_cluster(rows, cid, osm_scores):
     ds   = med_of(rows,'distress_score')
     rev  = med_of(rows,'revenue_2024') or 0
     ppe  = med_of(rows,'plant_property_equipment') or 0
-    acres = med_of(rows,'scraper_acres') or med_of(rows,'osm_acres') or 0
+    acres = med_of(rows,'acreage_primary') or med_of(rows,'scraper_acres') or med_of(rows,'osm_acres') or 0
     eq   = med_of(rows,'equity_ratio') or 0
 
     pct_op_loss  = pct_of(rows,'flag_990_operating_loss')
@@ -1669,9 +1598,11 @@ def main():
         for row in csv.DictReader(f): rows.append(row)
     print(f"  {len(rows):,} rows loaded")
 
-    # Build name→urbanization lookup for context-aware scoring
+    # Build name→urbanization and name→state lookups for context-aware scoring
     _urb_lookup = {r.get('institution_name',''): r.get('urbanization','')
                    for r in rows if r.get('institution_name')}
+    _state_lookup = {r.get('institution_name',''): r.get('state','')
+                     for r in rows if r.get('institution_name')}
 
     # Load and score OSM data
     osm_scores = {}
@@ -1688,12 +1619,11 @@ def main():
                 by_cat = parse_osm_feature_string(feat_str)
                 count  = r.get('osm_env_count', 0)
                 radius = r.get('osm_env_radius_miles', 20)
-                # Look up urbanization from master rows for context penalty
-                # We'll build urb_lookup after loading rows — patch below
                 if scorer:
                     score_result = scorer.score_osm_environment(
                         by_cat, feature_count=count, radius_miles=radius,
-                        urbanization=_urb_lookup.get(name)
+                        urbanization=_urb_lookup.get(name),
+                        state=_state_lookup.get(name)
                     )
                 else:
                     score_result = {'score': None, 'context_mult': None}
