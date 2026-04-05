@@ -292,7 +292,7 @@ def build_osm_lookup(osm_path, urb_lookup=None, name_to_loc=None):
             _urb = (urb_lookup or {}).get(composite_key) or (urb_lookup or {}).get(name)
             _env_score = _osm_scorer.score_osm_environment(
                 by_cat, feature_count=_count, radius_miles=_radius,
-                urbanization=_urb
+                urbanization=_urb, state=state
             ) if _osm_scorer else {'score': None, 'feature_score': None,
                                    'category_score': None, 'density_bonus': None,
                                    'radius_bonus': None, 'context_mult': None,

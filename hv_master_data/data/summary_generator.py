@@ -114,7 +114,7 @@ def build_env_score_lookup(osm_path, urb_lookup=None):
             _urb  = (urb_lookup or {}).get(key)
             result = _osm_scorer.score_osm_environment(
                 by_cat, feature_count=_count, radius_miles=_radius,
-                urbanization=_urb
+                urbanization=_urb, state=state
             )
             lookup[key] = result.get('score')  # float or None
     print(f'  OSM env scores: {sum(1 for v in lookup.values() if v is not None):,} scored')
